@@ -1,6 +1,6 @@
-# virtual-data-lab (VDL)
+# Virtual Data Lab (VDL)
 
-test drive generative models for sequential data, in terms of accuracy and privacy give a range of real-world and artificial datasets.
+Test drive generative models for sequential data w.r.t. to accuracy and privacy given a range of real-world and artificial datasets.
 
 ## `virtualdatalab`
 * Python tooling library with following capabilities
@@ -35,7 +35,7 @@ It is recommended to install`virtualdatalab` in a Conda virtual environment if n
 conda create --name vdl
 conda activate vdl
 conda install pip
-cd virtual-data-lab/virtualdatalab
+cd virtualdatalab/virtualdatalab
 pip install -r requirements.txt
 pip install . 
 ```
@@ -52,7 +52,7 @@ Data is assumed to be sorted within each sequence. (as defined by the `id`)
 
 To prepare data into common data format, please use `target_data_manipulation.load_convert_col_types()`
 
-##Writing your own synthesizer class
+## Writing your own synthesizer class
 
 All synthesizers must extend `synthesizes/base.py`. Additionally, `train` and `generate` must invoke 
 parent method via `super()`. Parent functions ensure that **common data format** is respected and that models can not be 
@@ -170,9 +170,9 @@ drive.mount("/content/gdrive")
 
 import os
 
-if os.path.isdir("vdl/virtual-data-lab/virtualdatalab"):
+if os.path.isdir("vdl/virtualdatalab/virtualdatalab"):
   # repo already existing
-  %cd vdl/virtual-data-lab
+  %cd vdl/virtualdatalab
   ! git pull 
   %cd virtualdatalab
   !pip install -r requirements.txt
@@ -180,8 +180,8 @@ if os.path.isdir("vdl/virtual-data-lab/virtualdatalab"):
 else:
   %mkdir vdl
   %cd vdl
-  ! git clone https://github.com/mostly-ai/virtual-data-lab.git
-  %cd virtual-data-lab/virtualdatalab
+  ! git clone https://github.com/mostly-ai/virtualdatalab.git
+  %cd virtualdatalab/virtualdatalab
   !pip install -r requirements.txt
   !pip install .
 ```

@@ -1,4 +1,4 @@
-name: virtual-data-lab
+name: virtualdatalab
 channels:
   - defaults
 dependencies:
@@ -133,5 +133,5 @@ dependencies:
     - widgetsnbextension==3.5.1
     - wrapt==1.12.1
     - zipp==3.1.0
-prefix: /home/victoria/miniconda3/envs/virtual-data-lab
+prefix: /home/victoria/miniconda3/envs/virtualdatalab
 
