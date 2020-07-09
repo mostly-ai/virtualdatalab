@@ -143,11 +143,14 @@ Thus the point would fail for privacy.
 ## useful_notebooks  
 Collection of notebooks with examples.
 
-* [identity_synthesizer_dummy.ipynb](useful_notebooks/identity_synthesizer_dummy.ipynb)
-    * Load in dummy data, synthesize with IdentitySynthesizer(samples from input data), calculate all metrics avaliable in VDL
-* [google_colab_setup.ipynb](useful_notebooks/google_colab_setup.ipynb)
+* [identity_synthesizer_dummy.ipynb](useful_notebooks/identity_synthesizer_dummy.ipynb`) 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/mostly-ai/virtualdatalab/blob/master/useful_notebooks/identity_synthesizer_dummy.ipynb) 
+    * Load in dummy data, synthesize with IdentitySynthesizer(samples from input data), calculate all metrics avaliable in VDL  
+* [google_colab_setup.ipynb](useful_notebooks/google_colab_setup.ipynb) 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/mostly-ai/virtualdatalab/blob/master/useful_notebooks/google_colab_setup.ipynb)
     * Ready made template to set up VDL on Google Colab
-*  [benchmark_example.ipynb](useful_notebooks/benchmark_example.ipynb`)
+*  [benchmark_example.ipynb](useful_notebooks/benchmark_example.ipynb`) 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/mostly-ai/virtualdatalab/blob/master/useful_notebooks/benchmark_example.ipynb)
     * Benchmark default settings: CDNOW + Berka, IdentitySynthesizer + FlatAutoEncoder
 
 ## Google Colab Usage
@@ -185,10 +188,6 @@ else:
   !pip install -r requirements.txt
   !pip install .
 ```
-Blank Template
-* [google_colab_setup.ipynb](useful_notebooks/google_colab_setup.ipynb)
-    * Ready made template to set up VDL on Google Colab
-
 
 References:  
 [Using Google Colab with Github](https://colab.research.google.com/github/googlecolab/colabtools/blob/master/notebooks/colab-github-demo.ipynb#scrollTo=WzIRIt9d2huC)
