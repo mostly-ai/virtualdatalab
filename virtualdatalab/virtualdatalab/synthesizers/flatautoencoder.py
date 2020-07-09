@@ -3,7 +3,7 @@ import torch.nn as nn
 from torch import optim
 import torch.nn.functional as F
 
-from typing import List,Tuple
+from typing import List, Tuple
 from pandas import DataFrame
 import numpy as np
 import pandas as pd
@@ -19,6 +19,7 @@ Encoder Decoder Mini Classes
 
 .:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:.
 """
+
 
 class _FlatEncoder(nn.Module):
     def __init__(self, input_size, hidden_state_sizes):
@@ -75,6 +76,7 @@ class _FlatDecoderCat(nn.Module):
         out = torch.sigmoid(out)
         return out
 
+
 """
 .:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:.
 
@@ -109,11 +111,11 @@ class FlatAutoEncoderSynthesizer(BaseSynthesizer):
     """
 
     def __init__(self,
-                 learning_rate:float=0.001,
-                 hidden_size_layer_list:List=[128,64,32],
-                 number_of_epochs:int=20,
-                 sigmoid_threshold:float=0.5,
-                 batch_size:int=100):
+                 learning_rate: float = 0.001,
+                 hidden_size_layer_list: List = [128, 64, 32],
+                 number_of_epochs: int = 20,
+                 sigmoid_threshold: float = 0.5,
+                 batch_size: int = 100):
 
         self.learning_rate = learning_rate
         self.hidden_size_layer_list = hidden_size_layer_list
@@ -125,16 +127,18 @@ class FlatAutoEncoderSynthesizer(BaseSynthesizer):
         self._data_has_categories = False
         self._data_has_numerics = False
 
+        # for formatting issues
+        self._underscore_column_mapping = {}
+
         if torch.cuda.is_available():
             self.dev = "cuda"
         else:
             self.dev = "cpu"
-        self.device = torch.device(self.dev )
+        self.device = torch.device(self.dev)
 
         print(f"Using {self.device} for computation")
 
-
-    def train(self,target_data:DataFrame,debug:bool=False):
+    def train(self, target_data: DataFrame, debug: bool = False):
         """
         Train FlatAutoEncoder. Declares decoder as self.attribute.
 
@@ -148,8 +152,25 @@ class FlatAutoEncoderSynthesizer(BaseSynthesizer):
         # due to some formatting issues col name can't have "_"
 
         col_underscore = [x for x in target_data.columns if "_" in x]
-        if len(col_underscore)>0:
-            raise Exception("Please replace _  in cols {}")
+        if len(col_underscore) > 0:
+            target_data = target_data.copy(deep=True)
+            # force replacement for formatting purposes
+            target_data_new_columns = []
+            unique_column_id = 0
+            # {new_column: original column}
+            self._underscore_column_mapping = {}
+            for column in target_data.columns:
+                if column in col_underscore:
+                    stripped_col = column.replace("_", "")
+                    new_column_name = f"{stripped_col}aa{unique_column_id}"
+                    unique_column_id = unique_column_id + 1
+                    target_data_new_columns.append(new_column_name)
+                    self._underscore_column_mapping[new_column_name] = column
+                else:
+                    target_data_new_columns.append(column)
+
+            target_data.columns = target_data_new_columns
+            # raise Exception("Please replace _  in cols {}")
 
         def _create_wide_table(df_sample, data_type):
             target_reset = df_sample.copy(deep=True)
@@ -163,7 +184,6 @@ class FlatAutoEncoderSynthesizer(BaseSynthesizer):
                 target_wide.columns = target_wide.columns.map(lambda x: '{}_{}'.format(x[0], x[1]))
             else:
                 raise Exception("Data Type not supported")
-
 
             return target_wide.reset_index()
 
@@ -261,22 +281,21 @@ class FlatAutoEncoderSynthesizer(BaseSynthesizer):
         if len(category_columns) > 0:
             self._data_has_categories = True
             target_wide_cat = _create_wide_table(target_cat, 'categorical')
-            self.decoder_cat_ = _train_autoencoder(target_wide_cat.drop("id",1), 'categorical', debug)
+            self.decoder_cat_ = _train_autoencoder(target_wide_cat.drop("id", 1), 'categorical', debug)
 
         if len(numeric_columns) > 0:
             self._data_has_numerics = True
             target_wide_numeric = _create_wide_table(target_num, 'numeric')
-            self._target_data_std  = target_wide_numeric.drop("id",1).mean()
-            self._target_data_mean = target_wide_numeric.drop("id",1).std()
+            self._target_data_std = target_wide_numeric.drop("id", 1).mean()
+            self._target_data_mean = target_wide_numeric.drop("id", 1).std()
             target_wide_numeric = ((target_wide_numeric - self._target_data_mean) / self._target_data_std)
-            self.decoder_num_ = _train_autoencoder(target_wide_numeric.drop("id",1), 'numeric', debug)
+            self.decoder_num_ = _train_autoencoder(target_wide_numeric.drop("id", 1), 'numeric', debug)
 
-        target_data = pd.merge(target_wide_cat,target_wide_numeric,left_on='id',right_on='id')
+        target_data = pd.merge(target_wide_cat, target_wide_numeric, left_on='id', right_on='id')
         # save attribute to access columns
         self._target_data_wide = target_data
 
-
-    def generate(self, number_of_subjects:int):
+    def generate(self, number_of_subjects: int):
         """
         Data is generated by feeding a random noise matrix to the numeric and categorical
         encoder
@@ -286,7 +305,7 @@ class FlatAutoEncoderSynthesizer(BaseSynthesizer):
 
         super().generate(self)
 
-        def _convert_wide_table(to_convert:DataFrame)->DataFrame:
+        def _convert_wide_table(to_convert: DataFrame) -> DataFrame:
             """
 
             Transform wide table back to long table. For metric usage.
@@ -326,22 +345,21 @@ class FlatAutoEncoderSynthesizer(BaseSynthesizer):
                         split = column.split("_")
                         col_name = split[0]
                         category = split[1]
-                        sequence_pos = split[2]
+                        sequence_pos = split[-1]
 
                         df_copy = to_convert[['id', column]].copy(deep=True)
                         df_copy.columns = ['id', 'val']
                         df_copy.loc[:, col_name] = category
                         df_copy.loc[:, 'sequence_pos'] = int(sequence_pos)
 
-
                         if not df_copy[df_copy['val'] != 0].empty:
                             cat_list.append(df_copy[df_copy['val'] != 0].drop('val', 1))
-                            
+
                     if len(cat_list) > 0:
                         df_cat_seq = pd.concat(cat_list)
                         all_cat_list.append(df_cat_seq)
-                    
-                if len(all_cat_list)>0:
+
+                if len(all_cat_list) > 0:
                     # possible that sequence positions since the sample is a multi label
                     df_cat_all = functools.reduce(lambda left, right: pd.merge(left, right, on=['id', 'sequence_pos']),
                                                   all_cat_list)
@@ -365,11 +383,12 @@ class FlatAutoEncoderSynthesizer(BaseSynthesizer):
 
                         df_copy = to_convert[['id', column]].copy(deep=True)
                         df_copy.columns = ['id', col_name]
-                        df_copy.loc[:,'sequence_pos'] = int(sequence_pos)
+                        df_copy.loc[:, 'sequence_pos'] = int(sequence_pos)
 
                         # demean
                         # self attributes act as lookup table
-                        df_copy.loc[:,col_name] = (df_copy.loc[:,col_name]*self._target_data_std.loc[column])+self._target_data_mean.loc[column]
+                        df_copy.loc[:, col_name] = (df_copy.loc[:, col_name] * self._target_data_std.loc[column]) + \
+                                                   self._target_data_mean.loc[column]
 
                         num_list.append(df_copy)
 
@@ -380,16 +399,20 @@ class FlatAutoEncoderSynthesizer(BaseSynthesizer):
                                               all_num_cols)
 
             # guarantee unique sequence pos per user
-            merged_joined = pd.merge(df_cat_all, df_num_all, how='inner', left_on=['id', 'sequence_pos'],right_on=['id', 'sequence_pos'])
+            merged_joined = pd.merge(df_cat_all, df_num_all, how='inner', left_on=['id', 'sequence_pos'],
+                                     right_on=['id', 'sequence_pos'])
 
             # tidy up
             merged_joined = merged_joined[
                 ['id', 'sequence_pos'] + list(set(merged_joined.columns) - set(['id', 'sequence_pos']))].sort_values(
-                ['id', 'sequence_pos']).reset_index(drop=True).set_index(['id','sequence_pos'])
+                ['id', 'sequence_pos']).reset_index(drop=True).set_index(['id', 'sequence_pos'])
 
             # recast to category
             if len(all_cat_list) > 0:
-                merged_joined.loc[:,category_dataframe['original_col_name'].unique()] = merged_joined.loc[:,category_dataframe['original_col_name'].unique()].astype('category')
+                merged_joined.loc[:, category_dataframe['original_col_name'].unique()] = merged_joined.loc[:,
+                                                                                         category_dataframe[
+                                                                                             'original_col_name'].unique()].astype(
+                    'category')
 
             merged_joined = merged_joined[~merged_joined.index.duplicated()]
 
@@ -413,7 +436,6 @@ class FlatAutoEncoderSynthesizer(BaseSynthesizer):
 
             generated_data_after_prob = pd.DataFrame(np.where(generated_data_cat >= sigmoid_threshold, 1, 0))
 
-
         if self._data_has_numerics == True:
             generated_data_num_prelim = self.decoder_num_(random_noise)
             if self.dev == 'cuda':
@@ -422,10 +444,17 @@ class FlatAutoEncoderSynthesizer(BaseSynthesizer):
             generated_data_num = pd.DataFrame(generated_data_num_prelim.detach().numpy())
 
         generated_data_wide = pd.concat([generated_data_after_prob, generated_data_num], axis=1)
-        generated_data_wide.columns = self._target_data_wide.drop("id",1).columns
+        generated_data_wide.columns = self._target_data_wide.drop("id", 1).columns
 
         generated_data_wide['id'] = range(number_of_subjects)
 
         generated_data = _convert_wide_table(generated_data_wide)
 
+        # map back to original column names
+
+        generated_data.columns = [
+            self._underscore_column_mapping[column] if column in self._underscore_column_mapping.keys() else column for
+            column in generated_data.columns]
+
+        # return generated_data_wide
         return generated_data
