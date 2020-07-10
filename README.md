@@ -5,8 +5,9 @@ Test drive generative models for sequential data w.r.t. to accuracy and privacy 
 ## `virtualdatalab`
 * Python tooling library with following capabilities
     * data manipulation
-        * `target_data_manipulation.load_convert_col_types`
-            * convert a Pandas DataFrame into Common Data Format
+        * `target_data_manipulation.prepare_common_data_format`
+            * loads in a data source and prepares it to fit common data format
+            * currently accepts `str` filepath to CSV or a Pandas DataFrame
            
     * data generation
         * `target_data_generate.generate_simple_seq_dummy`
@@ -50,7 +51,7 @@ The format specifies the data must be
 
 Data is assumed to be sorted within each sequence. (as defined by the `id`)
 
-To prepare data into common data format, please use `target_data_manipulation.load_convert_col_types()`
+To prepare data into common data format, please use `target_data_manipulation.prepare_common_data_format()`
 
 ## Writing your own synthesizer class
 

@@ -112,9 +112,10 @@ class FlatAutoEncoderSynthesizer(BaseSynthesizer):
 
     def __init__(self,
                  learning_rate: float = 0.001,
-                 hidden_size_layer_list: List = [128, 64, 32],
+                 hidden_size_layer_list: List = [512,128,64],
                  number_of_epochs: int = 20,
                  sigmoid_threshold: float = 0.5,
+                 latent_dim:int = 32,
                  batch_size: int = 100):
 
         self.learning_rate = learning_rate
@@ -122,6 +123,7 @@ class FlatAutoEncoderSynthesizer(BaseSynthesizer):
         self.number_of_epochs = number_of_epochs
         self.sigmoid_threshold = sigmoid_threshold
         self.batch_size = batch_size
+        self.latent_dim = latent_dim
 
         # know which models to generate
         self._data_has_categories = False

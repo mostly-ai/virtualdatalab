@@ -9,7 +9,7 @@ from typing import List,Any
 from pandas.api.types import is_numeric_dtype
 from pandas import DataFrame,Series
 
-def load_convert_col_types(fp: Any,
+def prepare_common_data_format(fp: Any,
                            cat_columns: List[str] = [],
                            num_columns: List[str] = []) -> DataFrame:
     """
@@ -34,8 +34,6 @@ def load_convert_col_types(fp: Any,
         if file_extension == 'csv':
             # hack so we don't have to declare types
             df = pd.read_csv(fp,low_memory=False)
-        elif file_extension == 'parquet':
-            df = pd.read_parquet(fp)
         else:
             raise AttributeError("File extension not supported")
     elif type(fp) == DataFrame:

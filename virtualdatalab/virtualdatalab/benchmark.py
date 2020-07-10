@@ -14,7 +14,7 @@ import pandas as pd
 
 import logging
 
-from virtualdatalab.target_data_manipulation import load_convert_col_types
+from virtualdatalab.target_data_manipulation import prepare_common_data_format
 from virtualdatalab.metrics import compare
 from virtualdatalab.datasets.loader import load_cdnow,load_berka
 
@@ -52,8 +52,8 @@ def benchmark(syntheizers_classes:List[Type],
     if len(datasets) == 0:
         # put both
 
-        cdnow = load_convert_col_types(load_cdnow())
-        berka = load_convert_col_types((load_berka()))
+        cdnow = prepare_common_data_format(load_cdnow())
+        berka = prepare_common_data_format((load_berka()))
         datasets = {
             'cdnow':cdnow,
             'berka':berka
