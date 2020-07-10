@@ -94,7 +94,7 @@ def benchmark(syntheizers_classes:List[Type],
                 #  ｡ﾟ☆: *.☽ .* :☆ﾟ
 
                 #synthetic_data = syntheizers_class.generate(len(target_data))
-                sample_size = np.min([len(target_data),10000])
+                sample_size = np.min([target_data.index.get_level_values('id').nunique(),10000])
                 LOGGER.info(f"Generation of {sample_size}")
                 synthetic_data = syntheizers_class.generate(int(sample_size))
 
