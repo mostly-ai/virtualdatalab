@@ -1,5 +1,6 @@
 import pandas as pd
 from os.path import dirname,join
+from virtualdatalab.target_data_manipulation import prepare_common_data_format
 
 def load_cdnow():
     """
@@ -9,7 +10,7 @@ def load_cdnow():
     """
     module_path = join(dirname(__file__), 'data/')
 
-    return pd.read_csv(f"{module_path}cdnow_len5.csv")
+    return prepare_common_data_format(pd.read_csv(f"{module_path}cdnow_len5.csv"))
 
 
 def load_berka():
@@ -21,4 +22,4 @@ def load_berka():
     """
     module_path = join(dirname(__file__), 'data/')
 
-    return pd.read_csv(f"{module_path}berka_len50.csv")
+    return prepare_common_data_format(pd.read_csv(f"{module_path}berka_len50.csv"))
