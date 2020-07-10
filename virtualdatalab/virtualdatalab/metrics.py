@@ -25,6 +25,8 @@ import scipy.stats as ss
 from sklearn.neighbors import NearestNeighbors
 from numpy import array
 
+from virtualdatalab.synthesizers.utils import check_common_data_format
+
 """
 <*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*>
 <*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*>
@@ -1022,6 +1024,9 @@ def compare(target_data:DataFrame,
     :returns: accuracy pi, privacy pi
 
     """
+    check_common_data_format(target_data)
+    check_common_data_format(synthetic_data)
+
 
     uni = _calculate_accuracy_metric(target_data, synthetic_data, 'uni_etvd')
     bi = _calculate_accuracy_metric(target_data, synthetic_data, 'bi_etvd')
