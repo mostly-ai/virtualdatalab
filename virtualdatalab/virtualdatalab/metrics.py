@@ -281,12 +281,10 @@ def _prepare_data_for_privacy_metrics(target_data: DataFrame,
 
     for column_name, column_type in column_dictionary.items():
         if column_type == 'categorical':
-            unique_cat_values = np.unique(
-                list(target_data_p[column_name].values) + list(syn_data_p[column_name].values))
-            mapping = dict(zip(unique_cat_values, range(0, len(unique_cat_values))))
 
-            target_data_p[column_name] = target_data_p[column_name].map(mapping)
-            syn_data_p[column_name] = syn_data_p[column_name].map(mapping)
+            target_data_p[column_name] = target_data_p[column_name].cat.codes
+            syn_data_p[column_name] = syn_data_p[column_name].cat.codes
+
         elif column_type == 'numeric':
             # fill na data with mean
             target_data_p[column_name] = target_data_p[column_name].fillna(target_data_p[column_name].dropna().mean())
@@ -997,11 +995,11 @@ def _calculate_privacy_metric(target_data:DataFrame,
 
 
         # two values returned, 1 means both tests passes, 0.5 means failed one test
-        average = sum(checks.values())
+        #average = sum(checks.values())
     else:
         raise Exception("Metric function not defined")
 
-    return average
+    return checks
 
 
 # opinated truth
@@ -1010,18 +1008,12 @@ def compare(target_data:DataFrame,
             ) -> Dict:
     """
 
-    Compare a target and synthetic dataset and returns an opinated performance indicator.
+    Compare a target and synthetic dataset and returns metrics
 
     :param target_data: target data
     :param synthetic_data: synthetic data
-    # always mean
 
-    currently supported
-    accuracy = weighting function of uni_etvd, bi_etvd, correlation
-    privacy = quantile test function of distance to closest record
-    and nearest neighbor distance ratio
-
-    :returns: accuracy pi, privacy pi
+    :returns: univariate_total_variation_distance,bivariate_total_variation_distance,correlation_difference,distance_to_closest_record,nearest_neighbor_distance_ratio
 
     """
     check_common_data_format(target_data)
@@ -1031,15 +1023,18 @@ def compare(target_data:DataFrame,
     uni = _calculate_accuracy_metric(target_data, synthetic_data, 'uni_etvd')
     bi = _calculate_accuracy_metric(target_data, synthetic_data, 'bi_etvd')
     correlation = _calculate_accuracy_metric(target_data, synthetic_data, 'correlation')
+    #
+    # percent_difference = np.mean(np.nan_to_num([uni, bi, correlation]))
+    #
+    # accuracy_opinion = 100 - percent_difference
 
-    percent_difference = np.mean(np.nan_to_num([uni, bi, correlation]))
-
-    accuracy_opinion = 100 - percent_difference
-
-    privacy_opinion = _calculate_privacy_metric(target_data, synthetic_data, 'privacy_dcr_nndr')
+    checks = _calculate_privacy_metric(target_data, synthetic_data, 'privacy_dcr_nndr')
 
     return {
-        'accuracy_pi':accuracy_opinion,
-        'privacy_test':privacy_opinion
+        'univariate_total_variation_distance':uni,
+        'bivariate_total_variation_distance':bi,
+        'correlation_difference':correlation,
+        'distance_to_closest_record':checks['distance_to_closest_record'],
+        'nearest_neighbor_distance_ratio':checks['nearest_neighbor_distance_ratio']
 
     }
