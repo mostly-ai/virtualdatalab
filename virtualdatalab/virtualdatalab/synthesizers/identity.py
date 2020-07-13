@@ -18,16 +18,13 @@ class IdentitySynthesizer(BaseSynthesizer):
         df_copy = self.target_data_ .copy(deep=True)
         unique_ids = df_copy.index.get_level_values(0).unique()
         sampled_ids = np.random.choice(unique_ids, size=number_of_subjects, replace=True)
-        list_all = []
-        new_id = 0
-        for sampled_id in sampled_ids:
-            sample = df_copy.loc[[sampled_id],:].reset_index().drop('id',1)
-            sample['id'] = new_id
-            new_id = new_id + 1
-            list_all.append(sample.set_index(['id','sequence_pos']))
+        grid = pd.DataFrame({'id': sampled_ids}).sort_values('id')
+        grid['id_new_'] = range(0, number_of_subjects)
+        dt = pd.merge(df_copy.reset_index(), grid, on='id')
+        dt['id'] = dt['id_new_']
+        dt = dt.drop(['id_new_'], axis=1).sort_values('id')
+        dt = dt.set_index(['id', 'sequence_pos'])
 
-        df_reset = pd.concat(list_all)
-
-        return df_reset
+        return dt
 
 
