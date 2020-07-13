@@ -201,7 +201,10 @@ def _flatten_table(data: DataFrame, column_type_dictionary: dict) -> DataFrame:
 
     to_exclude = ['sequence_pos', 'record_pos', 'id']
     col_to_melt = [x for x in data.columns if x not in to_exclude]
-    pivot = data.pivot(index='id', columns='record_pos', values=col_to_melt)
+    if -1 in data['record_pos'].unique():
+        pivot = data.pivot(index='id', columns='sequence_pos', values=col_to_melt)
+    else:
+        pivot = data.pivot(index='id', columns='record_pos', values=col_to_melt)
 
     # Lots of extra steps because pandas.pivot does not preserve column type
 
@@ -532,6 +535,7 @@ def _get_nn_model(train: DataFrame, cat_slice: int) -> Tuple[np.ndarray]:
         algorithm="ball_tree",
         n_jobs=None,
     )
+    train.to_csv("train.csv",index=False)
     nearest_neighbor_model.fit(train)
 
     return nearest_neighbor_model
@@ -926,9 +930,14 @@ def _calculate_accuracy_metric(target_data:DataFrame,
         correlation_differences = abs(
             target_correlations - syn_correlations.loc[target_correlations.index, target_correlations.columns])
 
+        # dropping na values
+
+        flattend_correlation = correlation_differences.values.flatten()
+        non_null_flat_correlations = flattend_correlation[~np.isnan(flattend_correlation)]
+
         # perfect score = 0, if correlations exactly match in target and synthetic
         # representative of a max difference percentage
-        summary = summary_func(correlation_differences)*100
+        summary = summary_func(non_null_flat_correlations)*100
     else:
         raise Exception("Metric function not defined")
 
@@ -969,8 +978,8 @@ def _calculate_privacy_metric(target_data:DataFrame,
     # check if data is in expected format
     original_column_type_dictionary = _generate_column_type_dictionary(target_data, synthetic_data)
 
-    sampled_data_target = _sample_data(target_data, 'random')
-    sampled_data_syn = _sample_data(synthetic_data, 'random')
+    sampled_data_target = _sample_data(target_data, 'all')
+    sampled_data_syn = _sample_data(synthetic_data, 'all')
 
     flat_table_target = _flatten_table(sampled_data_target, original_column_type_dictionary)
     flat_table_syn = _flatten_table(sampled_data_syn, original_column_type_dictionary)
