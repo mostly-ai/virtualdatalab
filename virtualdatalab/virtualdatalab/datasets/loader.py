@@ -22,4 +22,4 @@ def load_berka():
     """
     module_path = join(dirname(__file__), 'data/')
 
-    return prepare_common_data_format(pd.read_csv(f"{module_path}berka_len50.csv"))
+    return prepare_common_data_format(pd.read_csv(f"{module_path}berka_len10.csv"))
