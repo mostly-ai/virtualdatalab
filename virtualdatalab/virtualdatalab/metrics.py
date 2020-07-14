@@ -484,7 +484,6 @@ def _get_nn_model(train: DataFrame, cat_slice: int) -> Tuple[np.ndarray]:
         algorithm="ball_tree",
         n_jobs=None,
     )
-    train.to_csv("train.csv",index=False)
     nearest_neighbor_model.fit(train)
 
     return nearest_neighbor_model
@@ -973,6 +972,7 @@ def _calculate_privacy_metric(target_data:DataFrame,
 # opinated truth
 def compare(target_data:DataFrame,
             synthetic_data:DataFrame,
+            metrics_to_return:List = ['accuracy-frequency','privacy']
             ) -> Dict:
     """
 
@@ -980,29 +980,29 @@ def compare(target_data:DataFrame,
 
     :param target_data: target data
     :param synthetic_data: synthetic data
+    :param metrics_to_return: list of metric types to return, if empty compute all
+    ['accuracy-frequency','privacy']
 
     :returns: univariate_total_variation_distance,bivariate_total_variation_distance,correlation_difference,distance_to_closest_record,nearest_neighbor_distance_ratio
 
     """
     check_common_data_format(target_data)
     check_common_data_format(synthetic_data)
+    metrics_dict = {}
 
-
-    uni = _calculate_accuracy_metric(target_data, synthetic_data, 'uni_etvd')
-    bi = _calculate_accuracy_metric(target_data, synthetic_data, 'bi_etvd')
-    correlation = _calculate_accuracy_metric(target_data, synthetic_data, 'correlation')
-    #
+    if 'accuracy-frequency' in metrics_to_return:
+        metrics_dict['univariate_total_variation_distance'] = _calculate_accuracy_metric(target_data, synthetic_data, 'uni_etvd')
+        metrics_dict['bivariate_total_variation_distance'] = _calculate_accuracy_metric(target_data, synthetic_data, 'bi_etvd')
+        metrics_dict['correlation_difference'] = _calculate_accuracy_metric(target_data, synthetic_data, 'correlation')
+        #
     # percent_difference = np.mean(np.nan_to_num([uni, bi, correlation]))
     #
     # accuracy_opinion = 100 - percent_difference
 
-    checks = _calculate_privacy_metric(target_data, synthetic_data, 'privacy_dcr_nndr')
+    if 'privacy' in metrics_to_return:
+        checks = _calculate_privacy_metric(target_data, synthetic_data, 'privacy_dcr_nndr')
+        metrics_dict['distance_to_closest_record'] = checks['distance_to_closest_record']
+        metrics_dict['nearest_neighbor_distance_ratio'] = checks['nearest_neighbor_distance_ratio']
 
-    return {
-        'univariate_total_variation_distance':uni,
-        'bivariate_total_variation_distance':bi,
-        'correlation_difference':correlation,
-        'distance_to_closest_record':checks['distance_to_closest_record'],
-        'nearest_neighbor_distance_ratio':checks['nearest_neighbor_distance_ratio']
 
-    }
+    return metrics_dict

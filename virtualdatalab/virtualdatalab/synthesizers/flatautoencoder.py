@@ -324,8 +324,7 @@ class FlatAutoEncoderSynthesizer(BaseSynthesizer):
             # id col counts as numeric so we manually drop it out
             numeric_columns = set(self._target_data_wide.drop("id", 1).columns) - set(category_columns)
 
-            df_cat_all = pd.DataFrame()
-            df_num_all = pd.DataFrame()
+            dfs_to_merge = []
 
             if len(category_columns) > 0:
 
@@ -365,6 +364,8 @@ class FlatAutoEncoderSynthesizer(BaseSynthesizer):
                     # possible that sequence positions since the sample is a multi label
                     df_cat_all = functools.reduce(lambda left, right: pd.merge(left, right, on=['id', 'sequence_pos']),
                                                   all_cat_list)
+
+                    dfs_to_merge.append(df_cat_all)
             if len(numeric_columns):
                 numeric_dataframe = pd.DataFrame({"original_col_name": [x.split("_")[0] for x in numeric_columns],
                                                   "generated_col_name": list(numeric_columns)})
@@ -399,10 +400,14 @@ class FlatAutoEncoderSynthesizer(BaseSynthesizer):
 
                 df_num_all = functools.reduce(lambda left, right: pd.merge(left, right, on=['id', 'sequence_pos']),
                                               all_num_cols)
+                dfs_to_merge.append(df_num_all)
 
             # guarantee unique sequence pos per user
-            merged_joined = pd.merge(df_cat_all, df_num_all, how='inner', left_on=['id', 'sequence_pos'],
-                                     right_on=['id', 'sequence_pos'])
+            if len(dfs_to_merge) > 1:
+                merged_joined = pd.merge(df_cat_all, df_num_all, how='inner', left_on=['id', 'sequence_pos'],
+                                         right_on=['id', 'sequence_pos'])
+            else:
+                merged_joined = dfs_to_merge[0]
 
             # tidy up
             merged_joined = merged_joined[
@@ -430,7 +435,7 @@ class FlatAutoEncoderSynthesizer(BaseSynthesizer):
             generated_data_cat = self.decoder_cat_(random_noise)
 
             # sigmoid function
-            sigmoid_threshold = 0.3
+            sigmoid_threshold = 0.1
 
             if self.dev == 'cuda':
                 # must send tensor to cpu first
