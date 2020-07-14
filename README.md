@@ -4,12 +4,23 @@ License: [GPLv3](https://github.com/mostly-ai/virtualdatalab/blob/master/LICENSE
 
 Test drive generative models for sequential data w.r.t. to accuracy and privacy given a range of real-world and artificial datasets.
 
+Synthesizers and public functions accept only data formatted according to the following guideline. 
+
+#### Common Data Format
+
+* Pandas DataFrame
+* `id` (denoting a subject) `sequence_pos` (order of sequences belonging to one subject) as index
+* columns are either of type `numeric` or `categorical`
+
+`target_data_manipulation.prepare_common_data_format` is a helper function to convert a given Pandas DataFrame or CSV into the  **common data format**.
+
 ## `virtualdatalab`
 * Python tooling library with following capabilities
     * data manipulation
         * `target_data_manipulation.prepare_common_data_format`
             * loads in a data source and prepares it to fit common data format
             * currently accepts `str` filepath to CSV or a Pandas DataFrame
+            * data is assumed to be ordered within subject 
            
     * data generation
         * `target_data_generate.generate_simple_seq_dummy`
@@ -43,31 +54,16 @@ pip install -r requirements.txt
 pip install . 
 ```
 
-## Common Data Format 
-Virtual Data Lab functionality is based on a common data format. 
-
-The format specifies the data must be  
-* Pandas DataFrame
-* `id` column
-* Numeric and Categorical column types 
-
-Data is assumed to be sorted within each sequence. (as defined by the `id`)
-
-To prepare data into common data format, please use `target_data_manipulation.prepare_common_data_format()`
-
 ## Writing your own synthesizer class
 
 All synthesizers must extend `synthesizes/base.py`. Additionally, `train` and `generate` must invoke 
 parent method via `super()`. Parent functions ensure that **common data format** is respected and that models can not be 
 expected to generate if they have not been trained yet. 
 
-All synthesizer classes MUST accept the **common data format**. As a result, synthesizers are responsible for ensuring input 
-is ready to be fed into a given algorithm. 
+All synthesizer classes MUST accept the **common data format**. As a result, synthesizers are responsible for transformation of input data. 
 
-`base.generate` calls `check_is_fitted`. This simple check looks for attributes with _ naming convention. All synthesizers must
+`base.generate` calls `check_is_fitted`. This check looks for attributes with _ naming convention. All synthesizers must
 declare training attributes with this style. 
-
-
 
 For example
 
@@ -105,7 +101,7 @@ cd = load_cdnow()
 * Fixed sequence length = 5
 
 [1999 Czech Financial Dataset - Real Anonymized Transactions - trans.csv](https://data.world/lpetrocelli/czech-financial-dataset-real-anonymized-transactions) Real transactions released for PKDD,99 Discovery Challenge - `datasets/berka_len50.csv`
-* Fixed sequence length = 50
+* Fixed sequence length = 10
 
 
 ## Metric Definitions
