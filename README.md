@@ -2,7 +2,8 @@
 
 License: [GPLv3](https://github.com/mostly-ai/virtualdatalab/blob/master/LICENSE)
 
-Test drive generative models for sequential data w.r.t. to accuracy and privacy given a range of real-world and artificial datasets.
+The main motivation of VDL is to test drive generative models for sequential data w.r.t. to accuracy and privacy given a range of real-world and artificial datasets.
+
 
 Synthesizers and public functions accept only data formatted according to the following guideline. 
 
@@ -11,33 +12,43 @@ Synthesizers and public functions accept only data formatted according to the fo
 * Pandas DataFrame
 * `id` (denoting a subject) `sequence_pos` (order of sequences belonging to one subject) as index
 * columns are either of type `numeric` or `categorical`
+* single table (subject and sequence information is in single table)
 
 `target_data_manipulation.prepare_common_data_format` is a helper function to convert a given Pandas DataFrame or CSV into the  **common data format**.
 
 ## `virtualdatalab`
 * Python tooling library with following capabilities
-    * data manipulation
+    * **Data Processing**
         * `target_data_manipulation.prepare_common_data_format`
             * loads in a data source and prepares it to fit common data format
             * currently accepts `str` filepath to CSV or a Pandas DataFrame
             * data is assumed to be ordered within subject 
            
-    * data generation
+    * **Datasets & Mock Data Generation**
         * `target_data_generate.generate_simple_seq_dummy`
             * sequential dummy generation
-    * synthesizers
-        * IdentitySynthesizer 
-            * (= datacopy) 
-        * FlatAutoEncoder
-            * (Encoder - Decoder Fully Connected NN in PyTorch)]
+        * Preprocessed real-word datasets  
+            * Datasets are trimmed such that all users have a given fixed sequence length without padding
+                * [CD NOW](http://www.brucehardie.com/datasets/) - Transaction data of an online commerce site - `datasets/data/cdnow_len5.csv`
+                    * Datetime converted to day of week (category) 
+                    * Fixed sequence length = 5
+                * [1999 Czech Financial Dataset - Real Anonymized Transactions - trans.csv](https://data.world/lpetrocelli/czech-financial-dataset-real-anonymized-transactions) Real transactions released for PKDD,99 Discovery Challenge - `datasets/data/berka_len10.csv`
+                    * Fixed sequence length = 10
         
-    * metrics
+    * **Synthesizers**
+        * IdentitySynthesizer 
+            * Returns a sample of data randomly selected 
+        * FlatAutoEncoder
+            * Encoder - Decoder Fully Connected NN in PyTorch
+        
+    * **Metrics**
         * `metrics.compare`
-            * given a target dataset and synthetic dataset, compute an accuracy and privacy performance indicator 
+            * given a target dataset and synthetic dataset, compute accuracy and privacy themed metrics (See [Metric Definitions](#metric-definitions))
     
-    * utils for repeated experiments
+    * **Experimental Set-up**
         * `benchmark.benchmark` 
-            * run `metrics.compare` with many synthesizers across many datasets
+            * compute `metrics.compare` with many synthesizers across many datasets
+            * if no datasets are passed then the default datasets are used (CDNOW + Berka) (See [datasets](##datasets))
     
 
 ## Install 
@@ -85,58 +96,34 @@ class MyGenerator(BaseSynthesizer):
         return generated_data
 ```
 
-## datasets
-Preprocessed sequential datasets. Datasets are modified from original source. Sample of columns are chosen and users contain only fixed sequence length. 
-
-Example Use:
-````python
-from virtualdatalab.datasets.loader import load_cdnow
-cd = load_cdnow()
-# pd read in csv 
-````
-
-
-[CD NOW](http://www.brucehardie.com/datasets/) - Transaction data of an online commerce site - `datasets/cdnow_len5.csv`
-* Datetime removed 
-* Fixed sequence length = 5
-
-[1999 Czech Financial Dataset - Real Anonymized Transactions - trans.csv](https://data.world/lpetrocelli/czech-financial-dataset-real-anonymized-transactions) Real transactions released for PKDD,99 Discovery Challenge - `datasets/berka_len50.csv`
-* Fixed sequence length = 10
-
-
 ## Metric Definitions
-`benchmark` takes a simple combination of the metrics below to output one indicator per type. 
+`benchmark` takes a simple combination of the metrics below to output one indicator per type.
+
+![Screenshot](readme_imgs/benchmark_example.png)
 
 ### Accuracy
 
-For frequency related metrics, Numeric values are sorted into 10 equally spaced quantiles. 
+* ### Frequency - Related Metrics
+    * Numeric variables are binned according to 10 quantiles. Categories are binned into 20 categories if cardinality exceeds 20. 
 
-#### Univariate 
+    * #### Univariate Total Variation Distance
+        * Max difference between target and synthetic frequencies in one column
 
-Max difference between target and synthetic frequencies in one column
+    * #### Bivariate Total Variation Distance
+        * Max difference between target and synthetic frequencies in two columns.
 
-#### Bivariate
+    * #### Correlation Difference
 
-Max difference between target and synthetic frequencies in two columns.
-
-#### Autocorrelation
-
-Chi-square correlation is calculatd for target and synthetic. Metric equals the max difference between each correlation
-matrix.
+        * Chi-square correlation is calculatd for target and synthetic. Metric equals the max difference between each correlation matrix.
 
 ### Privacy
 
-#### Distance to Closest Records
-The distance of each synthetic data point to its closest target data point.
+* #### Distance to Closest Records
+    * The distance of each synthetic data point to its closest target data point. We aim to have the distribution not skewed to 0, as this would indicate there is no distance between synthetic and target.
 
-We aim to have the distribution not skewed to 0, as this would indicate there is no distance between synthetic 
-and target.
-
-#### Nearest Neighbour Distance Ratio
-The ratio between the closest and second closest distance of synthetic data points when 
-measured against the target data set. 
-
-An NNDR of 0 means that a given synthetic data point is only close to one point in the target, i.e an outlier. 
+* #### Nearest Neighbour Distance Ratio
+    * The ratio between the closest and second closest distance of synthetic data points when 
+measured against the target data set. An NNDR of 0 means that a given synthetic data point is only close to one point in the target, i.e an outlier. 
 Thus the point would fail for privacy.     
     
 ## useful_notebooks  
@@ -163,29 +150,12 @@ Every new notebook launched will need to reinstall VDL each time. Add the follow
 If running on Google Colab
 """
 
-# Mount Google Drive 
-
-from google.colab import drive
-# gdrive is google drive contents
-drive.mount("/content/gdrive")
-%cd gdrive/My\ Drive
-
-import os
-
-if os.path.isdir("vdl/virtualdatalab/virtualdatalab"):
-  # repo already existing
-  %cd vdl/virtualdatalab
-  ! git pull 
-  %cd virtualdatalab
-  !pip install -r requirements.txt
-  !pip install .
-else:
-  %mkdir vdl
-  %cd vdl
-  ! git clone https://github.com/mostly-ai/virtualdatalab.git
-  %cd virtualdatalab/virtualdatalab
-  !pip install -r requirements.txt
-  !pip install .
+%mkdir vdl
+%cd vdl
+! git clone https://github.com/mostly-ai/virtualdatalab.git
+%cd virtualdatalab/virtualdatalab
+!pip install -r requirements.txt
+!pip install .
 ```
 
 References:  
