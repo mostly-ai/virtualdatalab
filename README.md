@@ -1,5 +1,7 @@
 # Virtual Data Lab (VDL)
 
+License: [GPLv3](https://github.com/mostly-ai/virtualdatalab/blob/master/LICENSE)
+
 Test drive generative models for sequential data w.r.t. to accuracy and privacy given a range of real-world and artificial datasets.
 
 ## `virtualdatalab`
