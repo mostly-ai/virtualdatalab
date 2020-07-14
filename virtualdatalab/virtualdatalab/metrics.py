@@ -18,7 +18,6 @@ Privacy Metrics:
 import pandas as pd
 import numpy as np
 from itertools import product
-from pandas.api.types import is_numeric_dtype,is_categorical_dtype
 from pandas import DataFrame,Series
 from typing import List,Tuple,Dict, Callable
 import scipy.stats as ss
@@ -26,6 +25,7 @@ from sklearn.neighbors import NearestNeighbors
 from numpy import array
 
 from virtualdatalab.synthesizers.utils import check_common_data_format
+from virtualdatalab.target_data_manipulation import _generate_column_type_dictionary
 
 """
 <*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*>
@@ -44,57 +44,6 @@ Data Preprocessing Functions
 
 """
 
-
-def _generate_column_type_dictionary(target: DataFrame,
-                                     syn: DataFrame) -> dict:
-    """
-    Check target and synthetic data that they contain the same columns and only contain numeric and categorical types
-
-    :param target: target dataframe
-    :param syn: synthetic dataframe
-
-    :returns: column_type_dict: dictionary value of col names type
-
-    {
-        'num_col_0':'numeric',
-        'cat_col_0':'category'
-    }
-
-
-    """
-    assert sorted(target.columns) == sorted(syn.columns), "Target and Synthetic have different columns"
-
-    data_dict = {
-        'Target': target,
-        'Synthetic': syn[target.columns]
-    }
-
-    data_dict_types = {}
-
-    for label, data in data_dict.items():
-
-        column_types = dict(zip(data.dtypes.index, data.dtypes))
-
-        column_type_dict = {}
-        true_vector = []
-
-        for col_name, dtype in column_types.items():
-            if is_numeric_dtype(dtype):
-                column_type_dict[col_name] = 'numeric'
-                true_vector.append(True)
-            elif is_categorical_dtype(dtype):
-                column_type_dict[col_name] = 'categorical'
-                true_vector.append(True)
-            else:
-                true_vector.append(False)
-
-        assert sum(true_vector) == len(data.columns), f"{label} must only have numeric and categorical column types"
-
-        data_dict_types[label] = list(column_type_dict.values())
-
-    assert data_dict_types['Target'] == data_dict_types['Synthetic'], "Target and Synthetic have different types"
-
-    return column_type_dict
 
 
 def _sample_data(data: DataFrame,
@@ -215,9 +164,9 @@ def _flatten_table(data: DataFrame, column_type_dictionary: dict) -> DataFrame:
 
     for col in pivot:
         original_col_type = column_type_dictionary[new_columns_to_family[col]]
-        if original_col_type == 'categorical':
+        if original_col_type == 'category':
             pivot[col] = pd.Categorical(pivot[col])
-        elif original_col_type == 'numeric':
+        elif original_col_type == 'number':
             pivot[col] = pd.to_numeric(pivot[col])
 
     return pivot
@@ -235,12 +184,12 @@ def _bin_data(target_col: Series,
 
     """
     fill_na_val = 'not_in_target'
-    if col_type == 'numeric':
+    if col_type == 'number':
         binned_target, bins = pd.cut(target_col, bins=number_of_bins, retbins=True)
         # if synthetic has categories not in target, na value will appear
         # we drop this value
         binned_syn = pd.cut(syn_col, bins=bins).dropna()
-    elif col_type == 'categorical':
+    elif col_type == 'category':
         cardinality = target_col.nunique()
         if cardinality >= 100:
             top_19_cat = target_col.value_counts().sort_values(ascending=False)[:19].index
@@ -283,12 +232,12 @@ def _prepare_data_for_privacy_metrics(target_data: DataFrame,
     syn_data_p = syn_data.copy(deep=True)
 
     for column_name, column_type in column_dictionary.items():
-        if column_type == 'categorical':
+        if column_type == 'category':
 
             target_data_p[column_name] = target_data_p[column_name].cat.codes
             syn_data_p[column_name] = syn_data_p[column_name].cat.codes
 
-        elif column_type == 'numeric':
+        elif column_type == 'number':
             # fill na data with mean
             target_data_p[column_name] = target_data_p[column_name].fillna(target_data_p[column_name].dropna().mean())
             syn_data_p[column_name] = syn_data_p[column_name].fillna(syn_data_p[column_name].dropna().mean())
@@ -366,7 +315,7 @@ def _uni_etvd(binned_target: Series,
         binned_counts[f'{alt_col}_prop'] = (binned_counts[alt_col] / binned_counts[alt_col].sum()) * 100
         return binned_counts
 
-    if col_type in ('numeric', 'categorical'):
+    if col_type in ('category', 'number'):
         binned_target_copy = binned_target.copy(deep=True)
 
         binned_target_prop = prep_binning(binned_target_copy, 'target')
@@ -589,8 +538,8 @@ def _calculate_dcr_nndr(target_data_privacy: DataFrame,
     feature_columns = np.random.choice(model_columns, sample_feature_amount)
 
     # shift columns to put category features first for distance metric
-    category_columns = [x for x in feature_columns if column_dictionary[x] == 'categorical']
-    ordered_columns = category_columns + [x for x in feature_columns if column_dictionary[x] == 'numeric']
+    category_columns = [x for x in feature_columns if column_dictionary[x] == 'category']
+    ordered_columns = category_columns + [x for x in feature_columns if column_dictionary[x] == 'number']
     # where do cat columns begin
     cat_slice = len(category_columns)
 
@@ -854,7 +803,13 @@ def _calculate_accuracy_metric(target_data:DataFrame,
     """
 
     # check if data is in expected format
-    original_column_type_dictionary = _generate_column_type_dictionary(target_data, synthetic_data)
+
+    assert sorted(target_data.columns) == sorted(synthetic_data.columns), "Target and Synthetic have different columns"
+
+    original_column_type_dictionary = _generate_column_type_dictionary(target_data)
+    synthetic_column_type_dictionary = _generate_column_type_dictionary(synthetic_data)
+
+    assert original_column_type_dictionary == synthetic_column_type_dictionary, "Target and Synthetic have different types"
 
     sampled_data_target = _sample_data(target_data, 'random')
     sampled_data_syn = _sample_data(synthetic_data, 'random')
@@ -863,7 +818,7 @@ def _calculate_accuracy_metric(target_data:DataFrame,
     flat_table_syn = _flatten_table(sampled_data_syn, original_column_type_dictionary)
 
     # columns now include 1st and 2nd record
-    new_column_type_dictionary = _generate_column_type_dictionary(flat_table_target, flat_table_syn)
+    new_column_type_dictionary = _generate_column_type_dictionary(flat_table_target)
 
     df_binned_target = pd.DataFrame()
     df_binned_syn = pd.DataFrame()
@@ -975,8 +930,12 @@ def _calculate_privacy_metric(target_data:DataFrame,
 
     """
 
-    # check if data is in expected format
-    original_column_type_dictionary = _generate_column_type_dictionary(target_data, synthetic_data)
+    assert sorted(target_data.columns) == sorted(synthetic_data.columns), "Target and Synthetic have different columns"
+
+    original_column_type_dictionary = _generate_column_type_dictionary(target_data)
+    synthetic_column_type_dictionary = _generate_column_type_dictionary(synthetic_data)
+
+    assert original_column_type_dictionary == synthetic_column_type_dictionary, "Target and Synthetic have different types"
 
     sampled_data_target = _sample_data(target_data, 'all')
     sampled_data_syn = _sample_data(synthetic_data, 'all')
@@ -985,7 +944,7 @@ def _calculate_privacy_metric(target_data:DataFrame,
     flat_table_syn = _flatten_table(sampled_data_syn, original_column_type_dictionary)
 
     # columns now include 1st and 2nd record
-    new_column_type_dictionary = _generate_column_type_dictionary(flat_table_target, flat_table_syn)
+    new_column_type_dictionary = _generate_column_type_dictionary(flat_table_target)
 
 
     """

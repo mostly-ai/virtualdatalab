@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import json
 from typing import List,Any
-from pandas.api.types import is_numeric_dtype
+from pandas.api.types import is_numeric_dtype,is_categorical_dtype
 from pandas import DataFrame,Series
 
 def prepare_common_data_format(fp: Any,
@@ -149,3 +149,39 @@ def split_train_val(dataset, val_percent = .10):
     holdout = dataset[:ratio, :]
 
     return train, holdout
+
+def _generate_column_type_dictionary(data) -> dict:
+    """
+    Generate a
+
+    :param data:
+
+    :returns: column_type_dict: dictionary value of col names type
+
+    {
+        'num_col_0':'numeric',
+        'cat_col_0':'category'
+    }
+
+
+    """
+    column_types = dict(zip(data.dtypes.index, data.dtypes))
+
+    column_type_dict = {}
+    true_vector = []
+
+    for col_name, dtype in column_types.items():
+        if is_numeric_dtype(dtype):
+            column_type_dict[col_name] = 'number'
+            true_vector.append(True)
+        elif is_categorical_dtype(dtype):
+            column_type_dict[col_name] = 'category'
+            true_vector.append(True)
+        else:
+            true_vector.append(False)
+
+    assert sum(true_vector) == len(data.columns), " Data must only have number and category column types"
+
+
+
+    return column_type_dict
