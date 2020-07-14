@@ -48,7 +48,7 @@ Synthesizers and public functions accept only data formatted according to the fo
     * **Experimental Set-up**
         * `benchmark.benchmark` 
             * compute `metrics.compare` with many synthesizers across many datasets
-            * if no datasets are passed then the default datasets are used (CDNOW + Berka) (See [datasets](##datasets))
+            * if no datasets are passed then the default datasets are used (CDNOW + Berka)
     
 
 ## Install 
