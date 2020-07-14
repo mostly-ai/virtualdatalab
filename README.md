@@ -132,9 +132,9 @@ Collection of notebooks with examples.
 * [identity_synthesizer_dummy.ipynb](useful_notebooks/identity_synthesizer_dummy.ipynb`) 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/mostly-ai/virtualdatalab/blob/master/useful_notebooks/identity_synthesizer_dummy.ipynb) 
     * Load in dummy data, synthesize with IdentitySynthesizer(samples from input data), calculate all metrics avaliable in VDL  
-* [google_colab_setup.ipynb](useful_notebooks/google_colab_setup.ipynb) 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/mostly-ai/virtualdatalab/blob/master/useful_notebooks/google_colab_setup.ipynb)
-    * Ready made template to set up VDL on Google Colab
+*  [flatautoencoder_example.ipynb](useful_notebooks/flatautoencoder_example.ipynb`) 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/mostly-ai/virtualdatalab/blob/master/useful_notebooks/flatautoencoder_example.ipynb)
+    * FlatAutoEncoder demo with CDNOW
 *  [benchmark_example.ipynb](useful_notebooks/benchmark_example.ipynb`) 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/mostly-ai/virtualdatalab/blob/master/useful_notebooks/benchmark_example.ipynb)
     * Benchmark default settings: CDNOW + Berka, IdentitySynthesizer + FlatAutoEncoder
