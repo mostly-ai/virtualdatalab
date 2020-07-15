@@ -1,7 +1,9 @@
 from pandas import DataFrame
 from pandas.api.types import is_numeric_dtype,is_categorical_dtype
+import pandas as pd
 
 from virtualdatalab.utils.exceptions import NotFittedError
+
 
 def check_is_fitted(generator):
     """
@@ -66,4 +68,16 @@ def check_common_data_format(data):
 
     index_names = data.index.names
     assert "id" in index_names, "id not in Index"
-    
+
+def _assign_column_type(data,reference):
+
+
+    data_copy = data.copy()
+    for col in data_copy:
+        col_type = reference[col]
+        if col_type == 'category':
+            f = pd.Categorical
+        elif col_type == 'number':
+            f = pd.to_numeric
+        data_copy.loc[:,col] = f(data_copy.loc[:,col])
+    return data_copy
