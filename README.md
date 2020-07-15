@@ -1,58 +1,13 @@
-# Virtual Data Lab (VDL)
+# `virtualdatalab` (VDL)
 
 License: [GPLv3](https://github.com/mostly-ai/virtualdatalab/blob/master/LICENSE)
 
-The main motivation of VDL is to test drive generative models for sequential data w.r.t. to accuracy and privacy given a range of real-world and artificial datasets.
+VDL  to test drive generative models for sequential data w.r.t. to accuracy and privacy given a range of real-world and artificial datasets Aside from measurement capabilities, synthesizers 
+capable of sequential data generation are also included. VDL includes `virtualdatalab`,
 
-
-Synthesizers and public functions accept only data formatted according to the following guideline. 
-
-#### Common Data Format
-
-* Pandas DataFrame
-* `id` (denoting a subject) `sequence_pos` (order of sequences belonging to one subject) as index
-* columns are either of type `numeric` or `categorical`
-* single table (subject and sequence information is in single table)
-
-`target_data_manipulation.prepare_common_data_format` is a helper function to convert a given Pandas DataFrame or CSV into the  **common data format**.
-
-## `virtualdatalab`
-* Python tooling library with following capabilities
-    * **Data Processing**
-        * `target_data_manipulation.prepare_common_data_format`
-            * loads in a data source and prepares it to fit common data format
-            * currently accepts `str` filepath to CSV or a Pandas DataFrame
-            * data is assumed to be ordered within subject 
-           
-    * **Datasets & Mock Data Generation**
-        * `target_data_generate.generate_simple_seq_dummy`
-            * sequential dummy generation
-        * Preprocessed real-word datasets  
-            * Datasets are trimmed such that all users have a given fixed sequence length without padding
-                * [CD NOW](http://www.brucehardie.com/datasets/) - Transaction data of an online commerce site - `datasets/data/cdnow_len5.csv`
-                    * Datetime converted to day of week (category) 
-                    * Fixed sequence length = 5
-                * [1999 Czech Financial Dataset - Real Anonymized Transactions - trans.csv](https://data.world/lpetrocelli/czech-financial-dataset-real-anonymized-transactions) Real transactions released for PKDD,99 Discovery Challenge - `datasets/data/berka_len10.csv`
-                    * Fixed sequence length = 10
-        
-    * **Synthesizers**
-        * IdentitySynthesizer 
-            * Returns a sample of data randomly selected 
-        * FlatAutoEncoder
-            * Encoder - Decoder Fully Connected NN in PyTorch
-        
-    * **Metrics**
-        * `metrics.compare`
-            * given a target dataset and synthetic dataset, compute accuracy and privacy themed metrics (See [Metric Definitions](#metric-definitions))
-    
-    * **Experimental Set-up**
-        * `benchmark.benchmark` 
-            * compute `metrics.compare` with many synthesizers across many datasets
-            * if no datasets are passed then the default datasets are used (CDNOW + Berka)
-    
 
 ## Install 
-It is recommended to install`virtualdatalab` in a Conda virtual environment if not using Google Colab.
+It is recommended to install`virtualdatalab` in a Conda virtual environment to avoid interfering with other software programs. 
 
 ```bash
 # clone vdl
@@ -65,6 +20,62 @@ pip install -r requirements.txt
 pip install . 
 ```
 
+
+## Data Guidelines
+
+### Input Data
+
+Synthesizers and public functions accept only data formatted according to the following guideline. 
+
+
+#### Common Data Format
+* Pandas DataFrame
+* `id` (denoting a subject) `sequence_pos` (order of sequences belonging to one subject) as index
+* columns are either of type `numeric` or `categorical`
+* single table (subject and sequence information is in single table)
+
+`target_data_manipulation.prepare_common_data_format` is a helper function to convert a given Pandas DataFrame or CSV into the  **common data format**.
+
+### Output Data 
+
+Synthesizers output data in the same format as input data. 
+
+## Useful Features
+
+* **Data Processing**
+    * `target_data_manipulation.prepare_common_data_format`
+        * loads in a data source and prepares it to fit common data format
+        * currently accepts `str` filepath to CSV or a Pandas DataFrame
+        * data is assumed to be ordered within subject 
+       
+* **Datasets & Mock Data Generation**
+    * `target_data_generate.generate_simple_seq_dummy`
+        * sequential dummy generation
+    * Preprocessed real-word datasets  
+        * Datasets are formatted according to common data format when loading via helper functions 
+        * Datasets are trimmed such that all users have a given fixed sequence length without padding
+            * [CD NOW](http://www.brucehardie.com/datasets/) - Transaction data of an online commerce site - `datasets/data/cdnow_len5.csv`
+                * Datetime converted to day of week (category) 
+                * Fixed sequence length = 5
+            * [1999 Czech Financial Dataset - Real Anonymized Transactions](https://data.world/lpetrocelli/czech-financial-dataset-real-anonymized-transactions) Real transactions released for PKDD,99 Discovery Challenge - `datasets/data/berka_len10.csv`
+                * Fixed sequence length = 10
+    
+* **Included Synthesizers**
+    * IdentitySynthesizer 
+        * Returns a sample of data randomly selected 
+    * FlatAutoEncoder
+        * Encoder - Decoder Fully Connected NN in PyTorch
+    
+* **Metrics**
+    * `metrics.compare`
+        * given a target dataset and synthetic dataset, compute accuracy and privacy themed metrics (See [Metric Definitions](#metric-definitions))
+
+* **Experimental Set-up**
+    * `benchmark.benchmark` 
+        * compute `metrics.compare` with many synthesizers across many datasets
+        * if no datasets are passed then the default datasets are used (CDNOW + Berka)
+    
+
 ## Writing your own synthesizer class
 
 All synthesizers must extend `synthesizes/base.py`. Additionally, `train` and `generate` must invoke 
@@ -76,10 +87,7 @@ All synthesizer classes MUST accept the **common data format**. As a result, syn
 `base.generate` calls `check_is_fitted`. This check looks for attributes with _ naming convention. All synthesizers must
 declare training attributes with this style. 
 
-For example
-
 ```python
-
 class MyGenerator(BaseSynthesizer):
 
     def train(self,data):
@@ -124,9 +132,9 @@ class MyGenerator(BaseSynthesizer):
 * #### Nearest Neighbour Distance Ratio
     * The ratio between the closest and second closest distance of synthetic data points when 
 measured against the target data set. An NNDR of 0 means that a given synthetic data point is only close to one point in the target, i.e an outlier. 
-Thus the point would fail for privacy.     
+Thus the synthetic point is leaking information from the target data set. 
     
-## useful_notebooks  
+## Quick Start / Examples 
 Collection of notebooks with examples.
 
 * [identity_synthesizer_dummy.ipynb](useful_notebooks/identity_synthesizer_dummy.ipynb`) 
@@ -142,6 +150,7 @@ Collection of notebooks with examples.
 ## Google Colab Usage
 Optional prerequisites:  
 Google account - if interested in saving to drive. This is recommended, since datasets can be saved and loaded from Google Drive. 
+Saving to Github is not possible if loading the notebook from Mostly AI public repo. 
 
 Every new notebook launched will need to reinstall VDL each time. Add the following code snippet to your Google Colab notebooks. 
 
@@ -161,5 +170,3 @@ If running on Google Colab
 References:  
 [Using Google Colab with Github](https://colab.research.google.com/github/googlecolab/colabtools/blob/master/notebooks/colab-github-demo.ipynb#scrollTo=WzIRIt9d2huC)
 
-Notes:
-Saving to Github is not possible if loading the notebook from Mostly AI public repo. 
