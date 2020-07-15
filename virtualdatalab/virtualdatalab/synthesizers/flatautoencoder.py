@@ -81,6 +81,7 @@ def _clean_data(data):
             else:
                 data_new_columns.append(column)
 
+        data_copy.columns = data_new_columns
         return data_copy, underscore_column_mapping
     else:
         return data_copy, {}
@@ -168,7 +169,7 @@ class FlatAutoEncoderSynthesizer(BaseSynthesizer):
         super().generate(self)
         self.decoder_.eval()
 
-        sample_latent = torch.randn(number_of_subjects, self.latent_dim)
+        sample_latent = torch.randn(number_of_subjects, self.latent_dim).to(self.device)
 
         gd_torch = self.decoder_(sample_latent)
         gd_raw = pd.DataFrame(gd_torch.detach().numpy())
