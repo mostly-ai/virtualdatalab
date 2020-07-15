@@ -35,45 +35,10 @@ Synthesizers and public functions accept only data formatted according to the fo
 
 `target_data_manipulation.prepare_common_data_format` is a helper function to convert a given Pandas DataFrame or CSV into the  **common data format**.
 
+
 ### Output Data 
 
 Synthesizers output data in the same format as input data. 
-
-## Useful Features
-
-* **Data Processing**
-    * `target_data_manipulation.prepare_common_data_format`
-        * loads in a data source and prepares it to fit common data format
-        * currently accepts `str` filepath to CSV or a Pandas DataFrame
-        * data is assumed to be ordered within subject 
-       
-* **Datasets & Mock Data Generation**
-    * `target_data_generate.generate_simple_seq_dummy`
-        * sequential dummy generation
-    * Preprocessed real-word datasets  
-        * Datasets are formatted according to common data format when loading via helper functions 
-        * Datasets are trimmed such that all users have a given fixed sequence length without padding
-            * [CD NOW](http://www.brucehardie.com/datasets/) - Transaction data of an online commerce site - `datasets/data/cdnow_len5.csv`
-                * Datetime converted to day of week (category) 
-                * Fixed sequence length = 5
-            * [1999 Czech Financial Dataset - Real Anonymized Transactions](https://data.world/lpetrocelli/czech-financial-dataset-real-anonymized-transactions) Real transactions released for PKDD,99 Discovery Challenge - `datasets/data/berka_len10.csv`
-                * Fixed sequence length = 10
-    
-* **Included Synthesizers**
-    * IdentitySynthesizer 
-        * Returns a sample of data randomly selected 
-    * FlatAutoEncoder
-        * Encoder - Decoder Fully Connected NN in PyTorch
-    
-* **Metrics**
-    * `metrics.compare`
-        * given a target dataset and synthetic dataset, compute accuracy and privacy themed metrics (See [Metric Definitions](#metric-definitions))
-
-* **Experimental Set-up**
-    * `benchmark.benchmark` 
-        * compute `metrics.compare` with many synthesizers across many datasets
-        * if no datasets are passed then the default datasets are used (CDNOW + Berka)
-    
 
 ## Writing your own synthesizer class
 
@@ -103,6 +68,42 @@ class MyGenerator(BaseSynthesizer):
         return generated_data
 ```
 
+## Useful Features
+
+* **Data Processing**
+    * `target_data_manipulation.prepare_common_data_format`
+        * loads in a data source and prepares it to fit common data format
+        * currently accepts `str` filepath to CSV or a Pandas DataFrame
+        * data is assumed to be ordered within subject 
+       
+* **Datasets & Mock Data Generation**
+    * `target_data_generate.generate_simple_seq_dummy`
+        * sequential dummy generation
+    * Preprocessed real-word datasets  
+        * formatted according to common data format when loading via helper functions 
+        * trimmed such that all users have a given fixed sequence length without padding
+            * [CD NOW](http://www.brucehardie.com/datasets/) - Transaction data of an online commerce site - `datasets/data/cdnow_len5.csv`
+                * Datetime converted to day of week (category) 
+                * Fixed sequence length = 5
+            * [1999 Czech Financial Dataset - Real Anonymized Transactions](https://data.world/lpetrocelli/czech-financial-dataset-real-anonymized-transactions) Real transactions released for PKDD,99 Discovery Challenge - `datasets/data/berka_len10.csv`
+                * Fixed sequence length = 10
+    
+* **Included Synthesizers**
+    * IdentitySynthesizer 
+        * Returns a sample of data randomly selected 
+    * FlatAutoEncoder
+        * Encoder - Decoder Fully Connected NN in PyTorch
+    
+* **Metrics**
+    * `metrics.compare`
+        * given a target dataset and synthetic dataset, compute accuracy and privacy themed metrics (See [Metric Definitions](#metric-definitions))
+
+* **Experimental Set-up**
+    * `benchmark.benchmark` 
+        * compute `metrics.compare` with many synthesizers across many datasets
+        * if no datasets are passed then the default datasets are used (CDNOW + Berka)
+    
+
 ## Metric Definitions
 `benchmark` takes a simple combination of the metrics below to output one indicator per type.
 
@@ -110,28 +111,40 @@ class MyGenerator(BaseSynthesizer):
 
 ### Accuracy
 
-* ### Frequency - Related Metrics
-    * Numeric variables are binned according to 10 quantiles. Categories are binned into 20 categories if cardinality exceeds 20. 
+#### Frequency - Related Metrics
 
-    * #### Univariate Total Variation Distance
-        * Max difference between target and synthetic frequencies in one column
+The frequency related metrics calculate the difference between target and synthetic data frequency distributions. 
+To calculate the frequency, numeric variables are binned according to 10 quantiles. Categories are binned into 20 categories if cardinality exceeds 20. 
 
-    * #### Bivariate Total Variation Distance
-        * Max difference between target and synthetic frequencies in two columns.
+* ##### Univariate Total Variation Distance
+    * Measures frequencies with respect to one column.
 
-    * #### Correlation Difference
+* ##### Bivariate Total Variation Distance
+    * Measures frequencies with respect to two columns.
 
-        * Chi-square correlation is calculatd for target and synthetic. Metric equals the max difference between each correlation matrix.
+* ##### Correlation Difference
+
+    * Correlation is calculated using chi-square showing the association between two variables 
 
 ### Privacy
 
-* #### Distance to Closest Records
-    * The distance of each synthetic data point to its closest target data point. We aim to have the distribution not skewed to 0, as this would indicate there is no distance between synthetic and target.
 
-* #### Nearest Neighbour Distance Ratio
-    * The ratio between the closest and second closest distance of synthetic data points when 
-measured against the target data set. An NNDR of 0 means that a given synthetic data point is only close to one point in the target, i.e an outlier. 
+### Relative Distance
+The main goal of these metrics is to measure the relative distance between individual synthetic data points to individual target data points. 
+
+For each measure, a sample of the target dataset is drawn to be the holdout set. The remaining target dataset serves as a reference distribution. 
+The relative distance privacy metrics compare the target data holdout set and a synthetic data holdout set of the same size to this reference distribution. 
+
+![Screenshot](readme_imgs/privacy_split.png)
+
+* ##### Distance to Closest Records
+    * Calculates the distance of each holdout set point to a point in the reference distribution. We aim to have the distribution not skewed to 0, as this would indicate there is no distance between synthetic and target.
+
+* ##### Nearest Neighbour Distance Ratio
+    * ratio of the closest and second closest point in the holdout set to a point in the reference distribution. An NNDR of 0 means that a given synthetic data point is only close to one point in the target, i.e an outlier. 
 Thus the synthetic point is leaking information from the target data set. 
+
+![Screenshot](readme_imgs/nndr.png)
     
 ## Quick Start / Examples 
 Collection of notebooks with examples.
