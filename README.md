@@ -2,8 +2,7 @@
 
 License: [GPLv3](https://github.com/mostly-ai/virtualdatalab/blob/master/LICENSE)
 
-VDL  to test drive generative models for sequential data w.r.t. to accuracy and privacy given a range of real-world and artificial datasets Aside from measurement capabilities, synthesizers 
-capable of sequential data generation are also included. VDL includes `virtualdatalab`,
+VDL  to test drive generative models for sequential data w.r.t. to accuracy and privacy given a range of real-world and artificial datasets Aside from measurement capabilities, synthesizers capable of sequential data generation are also included. 
 
 
 ## Install 
