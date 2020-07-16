@@ -99,6 +99,14 @@ def _loss_function(input_data, target_data, mu, logvar, max_cat_idx):
 
 
 class FlatAutoEncoderSynthesizer(BaseSynthesizer):
+    """
+    Simple Variational Auto Encoder
+
+    Encoder - Decoder. Data is generated from latent space sampling being fed into the trained decoder.
+
+    Encoder layer dims are defined by hidden_size_layer_list in init. Decoder dims are reversed. 
+
+    """
     def __init__(self,
                  learning_rate: float = 0.001,
                  hidden_size_layer_list: List = [512, 128, 64],
@@ -163,7 +171,7 @@ class FlatAutoEncoderSynthesizer(BaseSynthesizer):
                 loss.backward()
                 optimizer.step()
             if verbose:
-                print(f"Epoch epoch: {epoch} // Average Loss: {np.average(loss_collection)}")
+                print(f"Epoch: {epoch} // Average Loss: {np.average(loss_collection)}")
 
     def generate(self, number_of_subjects):
         super().generate(self)
