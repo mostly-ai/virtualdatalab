@@ -172,6 +172,8 @@ class FlatAutoEncoderSynthesizer(BaseSynthesizer):
         sample_latent = torch.randn(number_of_subjects, self.latent_dim).to(self.device)
 
         gd_torch = self.decoder_(sample_latent)
+        if self.dev == 'cuda':
+            gd_torch = gd_torch.cpu()
         gd_raw = pd.DataFrame(gd_torch.detach().numpy())
         df_gd = pd.concat([pd.DataFrame(np.where(gd_raw.iloc[:, :self.max_cat_idx] >= self.cat_threshold, 1, 0)),
                            gd_raw.iloc[:, self.max_cat_idx:]], axis=1)

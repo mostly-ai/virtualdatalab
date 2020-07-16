@@ -76,6 +76,7 @@ class FlatStandardOneHot(DataProcessor):
         data_copy_wide = _assign_column_type(data_copy_wide, self.column_mapping)
         dfs_to_merge = []
 
+
         types_to_transform = ['category', 'number']
 
         for type_to_transform in types_to_transform:

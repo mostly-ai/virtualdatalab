@@ -76,9 +76,10 @@ class MyGenerator(BaseSynthesizer):
         * currently accepts `str` filepath to CSV or a Pandas DataFrame
         * data is assumed to be ordered within subject 
        
-* **Datasets & Mock Data Generation**
+* **Mock Data Generation && Datasets**
     * `target_data_generate.generate_simple_seq_dummy`
-        * sequential dummy generation
+        * numeric columns [0,1] uniform
+        * categorical alphabet uniformly drawn
     * Preprocessed real-word datasets  
         * formatted according to common data format when loading via helper functions 
         * trimmed such that all users have a given fixed sequence length without padding
