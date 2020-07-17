@@ -104,7 +104,7 @@ class FlatAutoEncoderSynthesizer(BaseSynthesizer):
 
     Encoder - Decoder. Data is generated from latent space sampling being fed into the trained decoder.
 
-    Encoder layer dims are defined by hidden_size_layer_list in init. Decoder dims are reversed. 
+    Encoder layer dims are defined by hidden_size_layer_list in init. Decoder dims are reversed.
 
     """
     def __init__(self,

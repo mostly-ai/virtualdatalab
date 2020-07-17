@@ -172,29 +172,36 @@ def _flatten_table(data: DataFrame, column_type_dictionary: dict) -> DataFrame:
     return pivot
 
 
-def _bin_data(target_col: Series,
-              syn_col: Series,
+def _bin_data(target_col,
+              syn_col,
               col_type: str,
               number_of_bins: int):
     """
     Bin Wide Data
 
+    Numerics must have 10 distinct bins.
+
     Category is left alone unless categories exceeds a given cardinality (100)
 
 
     """
-    fill_na_val = 'not_in_target'
     if col_type == 'number':
-        binned_target, bins = pd.cut(target_col, bins=number_of_bins, retbins=True)
+        filled_bins = 0
+        q = number_of_bins
+        while filled_bins < number_of_bins:
+            binned_target, bins = pd.qcut(target_col,q=q,retbins=True,duplicates='drop',precision=1)
+            filled_bins = sum(binned_target.value_counts()!=0)
+            q += 1
         # if synthetic has categories not in target, na value will appear
         # we drop this value
-        binned_syn = pd.cut(syn_col, bins=bins).dropna()
+        binned_syn = pd.cut(syn_col, bins=bins, include_lowest=True,precision=1).dropna()
     elif col_type == 'category':
         cardinality = target_col.nunique()
         if cardinality >= 100:
-            top_19_cat = target_col.value_counts().sort_values(ascending=False)[:19].index
-            other = target_col.value_counts().sort_values(ascending=False)[19:].index
-            first_dictionary = {cat: cat for cat in top_19_cat}
+            cut_off= 10
+            top_cat = target_col.value_counts().sort_values(ascending=False)[:cut_off-1].index
+            other = target_col.value_counts().sort_values(ascending=False)[cut_off-1:].index
+            first_dictionary = {cat: cat for cat in cut_off}
             first_dictionary.update({cat: '*' for cat in other})
             binned_target = target_col.map(first_dictionary)
             # if synthetic has categories not in target, na value will appear
@@ -285,6 +292,8 @@ def _uni_etvd(binned_target: Series,
     '''
     Univariate Empirical Total Variation Distance (UETVD) is the max difference in proportions between the target col and synthetic col distribution.
 
+    Value is bounded between 0 and 1
+
     Empirically it is calculated by
     1.
         i. For numeric values, cols are sorted into bins dervived from the target col
@@ -312,16 +321,16 @@ def _uni_etvd(binned_target: Series,
         '''
         binned_counts = df_binned_raw.value_counts().reset_index()
         binned_counts.columns = ['bins', alt_col]
-        binned_counts[f'{alt_col}_prop'] = (binned_counts[alt_col] / binned_counts[alt_col].sum()) * 100
+        binned_counts[f'{alt_col}_prop'] = (binned_counts[alt_col] / binned_counts[alt_col].sum())
         return binned_counts
 
     if col_type in ('category', 'number'):
-        binned_target_copy = binned_target.copy(deep=True)
 
-        binned_target_prop = prep_binning(binned_target_copy, 'target')
+        binned_target_prop = prep_binning(binned_target, 'target')
         binned_syn_prop = prep_binning(binned_syn, 'syn')
 
-        merged_bined = pd.merge(binned_target_prop, binned_syn_prop)
+        merged_bined = pd.merge(binned_target_prop, binned_syn_prop,how='left')
+        merged_bined['syn_prop'] = merged_bined['syn_prop'].fillna(0)
         merged_bined['diff'] = abs(merged_bined['target_prop'] - merged_bined['syn_prop'])
 
         return merged_bined['diff'].max()
@@ -351,8 +360,8 @@ def _bi_etvd(binned_target_r: DataFrame,
     target_d = binned_target_r.copy()
     syn_d = binned_syn_r.copy()
 
-    target_ct = pd.crosstab(target_d[first_col], target_d[second_col]) / len(target_d) * 100
-    syn_ct = pd.crosstab(syn_d[first_col], syn_d[second_col])/ len(syn_d) * 100
+    target_ct = pd.crosstab(target_d[first_col], target_d[second_col]) / len(target_d)
+    syn_ct = pd.crosstab(syn_d[first_col], syn_d[second_col])/ len(syn_d)
 
     # extra work if synthetic does not have classes that is in target
     # any extra classes synthetic may have are dropped out in _bin_data
@@ -746,7 +755,7 @@ def _calculate_dcr_nndr(target_data_privacy: DataFrame,
 def _calculate_accuracy_metric(target_data:DataFrame,
                               synthetic_data:DataFrame,
                               metric_func_name:str,
-                              summary_func_name:str='median',
+                              summary_func_name:str='mean',
                               number_of_bins:int = 10)-> float:
     """
     Compute a single metric for a given target and synthetic data set
@@ -878,8 +887,8 @@ def _calculate_accuracy_metric(target_data:DataFrame,
         summary = summary_func([val for val in bivariate_values if val != 'na'])
     elif metric_func_name == 'correlation':
 
-        target_correlations = _calculate_correlation(df_binned_target, list(new_column_type_dictionary.keys()))
-        syn_correlations = _calculate_correlation(df_binned_syn, list(new_column_type_dictionary.keys()))
+        target_correlations = _calculate_correlation(df_binned_target, list(new_column_type_dictionary.keys())).fillna(0)
+        syn_correlations = _calculate_correlation(df_binned_syn, list(new_column_type_dictionary.keys())).fillna(0)
 
         correlation_differences = abs(
             target_correlations - syn_correlations.loc[target_correlations.index, target_correlations.columns])
@@ -891,7 +900,7 @@ def _calculate_accuracy_metric(target_data:DataFrame,
 
         # perfect score = 0, if correlations exactly match in target and synthetic
         # representative of a max difference percentage
-        summary = summary_func(non_null_flat_correlations)*100
+        summary = summary_func(non_null_flat_correlations)
     else:
         raise Exception("Metric function not defined")
 

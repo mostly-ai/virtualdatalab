@@ -117,6 +117,8 @@ class MyGenerator(BaseSynthesizer):
 The frequency related metrics calculate the difference between target and synthetic data frequency distributions. 
 To calculate the frequency, numeric variables are binned according to 10 quantiles. Categories are binned into 20 categories if cardinality exceeds 20. 
 
+A perfect score is 0 which means that the synthetic data exactly matches the statistical correlations of target data.
+
 * ##### Univariate Total Variation Distance
     * Measures frequencies with respect to one column.
 
