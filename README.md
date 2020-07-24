@@ -102,10 +102,12 @@ class MyGenerator(BaseSynthesizer):
 
 * **Included Synthesizers**
     * IdentitySynthesizer 
-        * Returns a sample of data randomly selected 
+        * Returns a sample of the original data
+    * ShuffleSynthesizer 
+        * Returns a sample of the column-wise shuffled original data
     * FlatAutoEncoder
         * Encoder - Decoder Fully Connected NN in PyTorch
-    
+
 * **Metrics**
     * `metrics.compare`
         * given a target dataset and synthetic dataset, compute accuracy and privacy themed metrics (See [Metric Definitions](#metric-definitions))
@@ -171,7 +173,7 @@ Collection of notebooks with examples.
     * FlatAutoEncoder demo with CDNOW - accuracy
 *  [benchmark_example.ipynb](useful_notebooks/benchmark_example.ipynb`) 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/mostly-ai/virtualdatalab/blob/master/useful_notebooks/benchmark_example.ipynb)
-    * Benchmark default settings: CDNOW + Berka, IdentitySynthesizer + FlatAutoEncoder
+    * Benchmark default settings: CDNOW + BERKA + MLB, IdentitySynthesizer + ShuffleSynthesizer + FlatAutoEncoder
 
 ## Google Colab Usage
 Optional prerequisites:  

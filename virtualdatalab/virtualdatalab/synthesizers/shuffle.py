@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 from virtualdatalab.synthesizers.base import BaseSynthesizer
 
-class IdentitySynthesizer(BaseSynthesizer):
+class ShuffleSynthesizer(BaseSynthesizer):
     '''
 
     Returns the same data used to train)
@@ -15,7 +15,9 @@ class IdentitySynthesizer(BaseSynthesizer):
     def generate(self, number_of_subjects):
         super().generate(self)
 
-        df_copy = self.target_data_.copy(deep=True)
+        df_copy = self.target_data_ .copy(deep=True)
+        for x in df_copy.columns:
+            df_copy[[x]] = np.random.permutation(df_copy[[x]])
 
         unique_ids = df_copy.index.get_level_values(0).unique()
         sampled_ids = np.random.choice(unique_ids, size=number_of_subjects, replace=True)
@@ -27,5 +29,3 @@ class IdentitySynthesizer(BaseSynthesizer):
         df = df.set_index(['id', 'sequence_pos'])
 
         return df
-
-
