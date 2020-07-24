@@ -53,9 +53,11 @@ def benchmark(syntheizers_classes:List[Type],
 
         cdnow = load_cdnow()
         berka = load_berka()
+        mlb = load_mlb()
         datasets = {
             'cdnow':cdnow,
-            'berka':berka
+            'berka':berka,
+            'mlb':mlb
         }
 
     results_list = []

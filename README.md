@@ -71,24 +71,35 @@ class MyGenerator(BaseSynthesizer):
 ## Useful Features
 
 * **Data Processing**
-    * `target_data_manipulation.prepare_common_data_format`
+    * Convert to Common Data Format 
+        * `target_data_manipulation.prepare_common_data_format`
         * loads in a data source and prepares it to fit common data format
         * currently accepts `str` filepath to CSV or a Pandas DataFrame
-        * data is assumed to be ordered within subject 
+        * data is assumed to be ordered within subject
        
 * **Mock Data Generation && Datasets**
-    * `target_data_generate.generate_simple_seq_dummy`
+    * Mock Data Generator
+        * `target_data_generate.generate_simple_seq_dummy`
         * numeric columns [0,1] uniform
         * categorical alphabet uniformly drawn
-    * Preprocessed real-word datasets  
-        * formatted according to common data format when loading via helper functions 
-        * trimmed such that all users have a given fixed sequence length without padding
-            * [CD NOW](http://www.brucehardie.com/datasets/) - Transaction data of an online commerce site - `datasets/data/cdnow_len5.csv`
-                * Datetime converted to day of week (category) 
-                * Fixed sequence length = 5
-            * [1999 Czech Financial Dataset - Real Anonymized Transactions](https://data.world/lpetrocelli/czech-financial-dataset-real-anonymized-transactions) Real transactions released for PKDD,99 Discovery Challenge - `datasets/data/berka_len10.csv`
-                * Fixed sequence length = 10
-    
+    * Selected real-word datasets
+        * CDNOW - Online purchase for CDs
+            * `virtualdatalab.datasets.loader.load_cdnow()`
+            * 19'625 users with a sequence of 5 purchases
+            * source: http://www.brucehardie.com/datasets/
+        * BERKA - Retail bank transactions
+            * `virtualdatalab.datasets.loader.load_berka()`
+            * 44'000 users with a sequence of 10 transactions
+            * source: https://data.world/lpetrocelli/czech-financial-dataset-real-anonymized-transactions
+        * MLB - Batting statistics for MLB players
+            * `virtualdatalab.datasets.loader.load_mlb()`
+            * 4'000 baseball players with 8 recorded seasons
+            * source: http://www.seanlahman.com/baseball-archive/statistics/
+            * (c) 1996-2020 by Sean Lahman - http://creativecommons.org/licenses/by-sa/3.0/
+        * RETAIL - Grocery retail orders and product items
+            * `virtualdatalab.datasets.loader.load_retail()`
+            * 10'000 users with a sequence of 100 ordered products
+
 * **Included Synthesizers**
     * IdentitySynthesizer 
         * Returns a sample of data randomly selected 

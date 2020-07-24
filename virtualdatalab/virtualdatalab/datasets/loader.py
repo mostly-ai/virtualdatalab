@@ -22,4 +22,29 @@ def load_berka():
     """
     module_path = join(dirname(__file__), 'data/')
 
-    return prepare_common_data_format(pd.read_csv(f"{module_path}berka_len10.csv"))
+    return prepare_common_data_format(pd.read_csv(f"{module_path}berka_len10.csv.gz", compression='gzip'))
+
+
+def load_mlb():
+    """
+
+    Load MLB dataset
+
+    :returns: pandas dataframe
+    """
+    module_path = join(dirname(__file__), 'data/')
+
+    return prepare_common_data_format(pd.read_csv(f"{module_path}mlb_len8.csv.gz", compression='gzip'))
+
+
+
+def load_retail():
+    """
+
+    Load RETAIL dataset
+
+    :returns: pandas dataframe
+    """
+    module_path = join(dirname(__file__), 'data/')
+
+    return prepare_common_data_format(pd.read_csv(f"{module_path}retail_len100.csv.gz", compression='gzip'))
