@@ -15,7 +15,7 @@ import pandas as pd
 import logging
 
 from virtualdatalab.metrics import compare
-from virtualdatalab.datasets.loader import load_cdnow,load_berka
+from virtualdatalab.datasets.loader import load_cdnow,load_berka,load_mlb
 
 import time
 
