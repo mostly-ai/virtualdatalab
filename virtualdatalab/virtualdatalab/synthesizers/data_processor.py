@@ -77,7 +77,7 @@ class FlatStandardOneHot(DataProcessor):
         dfs_to_merge = []
 
 
-        types_to_transform = ['category', 'number']
+        types_to_transform = ['number', 'category']
 
         for type_to_transform in types_to_transform:
             df_sample_tranform = data_copy_wide.select_dtypes(include=type_to_transform)
@@ -125,6 +125,8 @@ class FlatStandardOneHot(DataProcessor):
 
                             if not mini_copy[mini_copy['val'] != 0].empty:
                                 df_one_column_list.append(mini_copy[mini_copy['val'] != 0].drop('val', 1))
+                            else:
+                                df_one_column_list.append(mini_copy.drop('val',1))
 
                         elif type_to_transform == 'number':
                             mini_copy.columns = [col_name, 'sequence_pos']
@@ -150,7 +152,7 @@ class FlatStandardOneHot(DataProcessor):
                 dfs_to_merge.append(df_column_all)
 
         if len(dfs_to_merge) > 1:
-            detransformed_data = functools.reduce(lambda left, right: pd.merge(left, right, on=['id', 'sequence_pos']),
+            detransformed_data = functools.reduce(lambda left, right: pd.merge(left, right, on=['id', 'sequence_pos'],how='left'),
                                                   dfs_to_merge)
         else:
             detransformed_data = dfs_to_merge[0]

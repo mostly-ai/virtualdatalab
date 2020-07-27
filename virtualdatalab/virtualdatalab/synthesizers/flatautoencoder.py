@@ -3,15 +3,10 @@ from torch.nn import Linear, Module, Parameter, ReLU, Sequential
 from torch.nn.functional import multilabel_soft_margin_loss, mse_loss
 from torch.optim import Adam
 
-import pandas as pd
-
-from typing import List, Tuple
-from pandas import DataFrame
+from typing import List
 import numpy as np
 import pandas as pd
-import functools
-
-from pandas.api.types import is_categorical_dtype
+from scipy.special import expit
 
 
 from virtualdatalab.synthesizers.base import BaseSynthesizer
@@ -31,12 +26,12 @@ class Encoder(Module):
             dim = item
         self.seq = Sequential(*seq)
         self.mu = Linear(dim, embedding_dim)
-        self.std = Linear(dim, embedding_dim)
+        self.logvar = Linear(dim, embedding_dim)
 
     def forward(self, input):
         feature = self.seq(input)
         mu = self.mu(feature)
-        logvar = self.std(feature)
+        logvar = self.logvar(feature)
         std = torch.exp(0.5 * logvar)
         return mu, std, logvar
 
@@ -89,11 +84,21 @@ def _clean_data(data):
 
 def _loss_function(input_data, target_data, mu, logvar, max_cat_idx):
 
-    cat_loss = multilabel_soft_margin_loss(input_data[:, :max_cat_idx], target_data[:, :max_cat_idx])
-    num_loss = mse_loss(input_data[:, max_cat_idx:], target_data[:, max_cat_idx:])
+    # mixed column type
+    if max_cat_idx is not None:
+        cat_loss = multilabel_soft_margin_loss(input_data[:, :max_cat_idx], target_data[:, :max_cat_idx])
+        num_loss = mse_loss(input_data[:, max_cat_idx:], target_data[:, max_cat_idx:])
+        recon_loss_avg = cat_loss + num_loss
+    elif max_cat_idx is None:
+    # only cat columns
+        recon_loss_avg = multilabel_soft_margin_loss(input_data,target_data,reduction='mean')
+    else:
+    # only num columns
+        recon_loss_avg = mse_loss(input_data,target_data,reduction='mean')
 
-    recon_loss_avg = cat_loss + num_loss
+
     KLD_avg = (-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())) / input_data.size()[0]
+
 
     return recon_loss_avg + KLD_avg
 
@@ -108,13 +113,15 @@ class FlatAutoEncoderSynthesizer(BaseSynthesizer):
 
     """
     def __init__(self,
-                 learning_rate: float = 0.001,
-                 hidden_size_layer_list: List = [512, 128, 64],
-                 latent_dim: int = 32,
+                 l2pen: float = 1e-5,
+                 learning_rate:float = 1e-5,
+                 hidden_size_layer_list: List = [128],
+                 latent_dim: int = 64,
                  number_of_epochs: int = 20,
-                 cat_threshold: float = -2,
+                 cat_threshold: float = 0.5,
                  batch_size: int = 100):
 
+        self.l2pen = l2pen
         self.learning_rate = learning_rate
         self.hidden_size_layer_list = hidden_size_layer_list
         self.reverse_hidden_size_layer_list = hidden_size_layer_list.copy()
@@ -136,7 +143,7 @@ class FlatAutoEncoderSynthesizer(BaseSynthesizer):
 
         print(f"Using {self.device} for computation")
 
-    def train(self, target_data, verbose=True):
+    def train(self, target_data, verbose=False):
         super().train(target_data)
 
         prepared_data, self._underscore_column_mapping = _clean_data(target_data)
@@ -147,14 +154,23 @@ class FlatAutoEncoderSynthesizer(BaseSynthesizer):
 
         x = torch.tensor(self.transformed_data.astype(np.float32).values).to(self.device)
         train = torch.utils.data.TensorDataset(x)
-        training_generator = torch.utils.data.DataLoader(train, batch_size=self.batch_size, shuffle=True)
+        training_generator = torch.utils.data.DataLoader(train, batch_size=self.batch_size, shuffle=True,drop_last=True)
 
         encoder = Encoder(x.shape[1], self.hidden_size_layer_list, self.latent_dim).to(self.device)
 
         self.decoder_ = Decoder(self.latent_dim, self.reverse_hidden_size_layer_list, x.shape[1]).to(self.device)
-        optimizer = Adam(list(encoder.parameters()) + list(self.decoder_.parameters()), weight_decay=self.learning_rate)
+        optimizer = Adam(list(encoder.parameters()) + list(self.decoder_.parameters()),lr=self.learning_rate,weight_decay=self.l2pen)
 
-        self.max_cat_idx = np.max([key for key, val in index_mapping.items() if val == 'category']) + 1
+        cat_index = [key for key, val in index_mapping.items() if val == 'category']
+        # only cat columns
+        if len(cat_index)==len(index_mapping):
+            self.max_cat_idx = None
+        elif len(cat_index) > 0:
+        # mixed column
+            self.max_cat_idx = np.max([key for key, val in index_mapping.items() if val == 'category']) + 1
+        else:
+        # only numeric column
+            self.max_cat_idx = -1
 
         for epoch in range(self.number_of_epochs):
             loss_collection = []
@@ -172,7 +188,7 @@ class FlatAutoEncoderSynthesizer(BaseSynthesizer):
                 optimizer.step()
             if verbose:
                 print(f"Epoch: {epoch} // Average Loss: {np.average(loss_collection)}")
-
+        return x
     def generate(self, number_of_subjects):
         super().generate(self)
         self.decoder_.eval()
@@ -183,8 +199,14 @@ class FlatAutoEncoderSynthesizer(BaseSynthesizer):
         if self.dev == 'cuda':
             gd_torch = gd_torch.cpu()
         gd_raw = pd.DataFrame(gd_torch.detach().numpy())
-        df_gd = pd.concat([pd.DataFrame(np.where(gd_raw.iloc[:, :self.max_cat_idx] >= self.cat_threshold, 1, 0)),
-                           gd_raw.iloc[:, self.max_cat_idx:]], axis=1)
+        self.raw_generated_data = gd_raw
+        if self.max_cat_idx == -1:
+            df_gd = gd_raw
+        elif self.max_cat_idx == None:
+            df_gd = pd.DataFrame((np.where(expit(gd_raw.iloc[:, :self.max_cat_idx]) >= self.cat_threshold, 1, 0)))
+        else:
+            df_gd = pd.concat([pd.DataFrame((np.where(expit(gd_raw.iloc[:, :self.max_cat_idx]) >= self.cat_threshold, 1, 0))),
+                               gd_raw.iloc[:, self.max_cat_idx:]], axis=1)
         df_gd.columns = self.transformed_data.columns
         df_gd['id'] = range(0, len(df_gd))
         df_gd.set_index('id', inplace=True)
