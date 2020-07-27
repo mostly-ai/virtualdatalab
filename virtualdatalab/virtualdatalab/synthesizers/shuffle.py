@@ -1,6 +1,8 @@
 import pandas as pd
 import numpy as np
 from virtualdatalab.synthesizers.base import BaseSynthesizer
+from virtualdatalab.target_data_manipulation import  _generate_column_type_dictionary
+from virtualdatalab.synthesizers.utils import _assign_column_type
 
 class ShuffleSynthesizer(BaseSynthesizer):
     '''
@@ -27,5 +29,8 @@ class ShuffleSynthesizer(BaseSynthesizer):
         df['id'] = df['id_new_']
         df = df.drop(['id_new_'], axis=1).sort_values('id')
         df = df.set_index(['id', 'sequence_pos'])
+        # merge caueses dataframes to lose their types
+        reference = _generate_column_type_dictionary(self.target_data_)
+        df = _assign_column_type(df,reference)
 
         return df
