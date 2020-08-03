@@ -1,6 +1,6 @@
 import torch
-from torch.nn import Linear, Module, Parameter, ReLU, Sequential
-from torch.nn.functional import multilabel_soft_margin_loss, mse_loss
+from torch.nn import Linear, Module, ReLU, Sequential
+from torch.nn.functional import cross_entropy, mse_loss
 from torch.optim import Adam
 
 from typing import List
@@ -82,23 +82,35 @@ def _clean_data(data):
         return data_copy, {}
 
 
-def _loss_function(input_data, target_data, mu, logvar, max_cat_idx):
+def _loss_function(input_data,
+                   target_data,
+                   target_mapping,
+                   last_index_real_data,
+                   mu,
+                   logvar):
 
-    # mixed column type
-    if max_cat_idx is not None:
-        cat_loss = multilabel_soft_margin_loss(input_data[:, :max_cat_idx], target_data[:, :max_cat_idx])
-        num_loss = mse_loss(input_data[:, max_cat_idx:], target_data[:, max_cat_idx:])
-        recon_loss_avg = cat_loss + num_loss
-    elif max_cat_idx is None:
-    # only cat columns
-        recon_loss_avg = multilabel_soft_margin_loss(input_data,target_data,reduction='mean')
+    if target_mapping is None:
+        recon_loss_avg = mse_loss(input_data, target_data)
     else:
-    # only num columns
-        recon_loss_avg = mse_loss(input_data,target_data,reduction='mean')
+        total_recon_loss = []
+        last_entry = 0
+        for _, info_dict in target_mapping.items():
+            for col_indexing, original_indexing in info_dict.items():
+                first_index = int(col_indexing.split("_")[1])
+                second_index = int(col_indexing.split("_")[2])
 
+                cat_loss = cross_entropy(input_data[:,first_index:second_index],target_data[:,original_indexing].long())
+                total_recon_loss.append(cat_loss)
+                last_entry = second_index
+
+        if last_entry != last_index_real_data:
+            # mixed type
+            num_loss = mse_loss(input_data[:, last_entry:], target_data[:, last_entry:last_index_real_data])
+            total_recon_loss.append(num_loss)
+
+        recon_loss_avg = sum(total_recon_loss)
 
     KLD_avg = (-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())) / input_data.size()[0]
-
 
     return recon_loss_avg + KLD_avg
 
@@ -119,7 +131,8 @@ class FlatAutoEncoderSynthesizer(BaseSynthesizer):
                  latent_dim: int = 64,
                  number_of_epochs: int = 20,
                  cat_threshold: float = 0.5,
-                 batch_size: int = 100):
+                 batch_size: int = 100,
+                 sample_tech: str = 'max'):
 
         self.l2pen = l2pen
         self.learning_rate = learning_rate
@@ -130,6 +143,7 @@ class FlatAutoEncoderSynthesizer(BaseSynthesizer):
         self.number_of_epochs = number_of_epochs
         self.cat_threshold = cat_threshold
         self.batch_size = batch_size
+        self.sample_tech = sample_tech
 
         # for formatting issues
         self._underscore_column_mapping = {}
@@ -150,45 +164,45 @@ class FlatAutoEncoderSynthesizer(BaseSynthesizer):
         self.data_processor = FlatStandardOneHot()
         self.transformed_data = self.data_processor.transform(prepared_data)
 
-        index_mapping = self.data_processor.idx_mapping
-
         x = torch.tensor(self.transformed_data.astype(np.float32).values).to(self.device)
         train = torch.utils.data.TensorDataset(x)
         training_generator = torch.utils.data.DataLoader(train, batch_size=self.batch_size, shuffle=True,drop_last=True)
 
-        encoder = Encoder(x.shape[1], self.hidden_size_layer_list, self.latent_dim).to(self.device)
-
-        self.decoder_ = Decoder(self.latent_dim, self.reverse_hidden_size_layer_list, x.shape[1]).to(self.device)
-        optimizer = Adam(list(encoder.parameters()) + list(self.decoder_.parameters()),lr=self.learning_rate,weight_decay=self.l2pen)
-
-        cat_index = [key for key, val in index_mapping.items() if val == 'category']
-        # only cat columns
-        if len(cat_index)==len(index_mapping):
-            self.max_cat_idx = None
-        elif len(cat_index) > 0:
-        # mixed column
-            self.max_cat_idx = np.max([key for key, val in index_mapping.items() if val == 'category']) + 1
+        if self.data_processor._last_index is None:
+            dim_size = x.shape[1]
         else:
-        # only numeric column
-            self.max_cat_idx = -1
+            dim_size = self.data_processor._last_index
+        encoder = Encoder(dim_size, self.hidden_size_layer_list, self.latent_dim).to(self.device)
+
+        self.decoder_ = Decoder(self.latent_dim, self.reverse_hidden_size_layer_list, dim_size).to(self.device)
+        optimizer = Adam(list(encoder.parameters()) + list(self.decoder_.parameters()),lr=self.learning_rate,weight_decay=self.l2pen)
 
         for epoch in range(self.number_of_epochs):
             loss_collection = []
             for batch_idx, batch_sample in enumerate(training_generator):
                 optimizer.zero_grad()
                 batch_sample = batch_sample[0].to(self.device)
-                mu, std, logvar = encoder(batch_sample)
+                mu, std, logvar = encoder(batch_sample[:, :dim_size])
                 # reparametrize trick
                 eps = torch.randn_like(std)
                 emb = eps * std + mu
                 reconstruction = self.decoder_(emb)
-                loss = _loss_function(reconstruction, batch_sample, mu, logvar, self.max_cat_idx)
+                # reconstruction from model
+                # batch_sample original data
+                # target_mapping needed for loss
+                loss = _loss_function(reconstruction,
+                                      batch_sample,
+                                      self.data_processor._category_idx_real_data,
+                                      self.data_processor._last_index,
+                                      mu,
+                                      logvar)
                 loss_collection.append(loss.item())
                 loss.backward()
                 optimizer.step()
             if verbose:
                 print(f"Epoch: {epoch} // Average Loss: {np.average(loss_collection)}")
         return x
+
     def generate(self, number_of_subjects):
         super().generate(self)
         self.decoder_.eval()
@@ -198,19 +212,12 @@ class FlatAutoEncoderSynthesizer(BaseSynthesizer):
         gd_torch = self.decoder_(sample_latent)
         if self.dev == 'cuda':
             gd_torch = gd_torch.cpu()
-        gd_raw = pd.DataFrame(gd_torch.detach().numpy())
-        self.raw_generated_data = gd_raw
-        if self.max_cat_idx == -1:
-            df_gd = gd_raw
-        elif self.max_cat_idx == None:
-            df_gd = pd.DataFrame((np.where(expit(gd_raw.iloc[:, :self.max_cat_idx]) >= self.cat_threshold, 1, 0)))
-        else:
-            df_gd = pd.concat([pd.DataFrame((np.where(expit(gd_raw.iloc[:, :self.max_cat_idx]) >= self.cat_threshold, 1, 0))),
-                               gd_raw.iloc[:, self.max_cat_idx:]], axis=1)
-        df_gd.columns = self.transformed_data.columns
+        df_gd = pd.DataFrame(gd_torch.detach().numpy())
+        df_gd.columns = self.transformed_data.columns[:self.data_processor._last_index]
         df_gd['id'] = range(0, len(df_gd))
         df_gd.set_index('id', inplace=True)
-        generated_data = self.data_processor.inverse_transform(df_gd).sort_index()
+        self.raw_generated_data = df_gd
+        generated_data = self.data_processor.inverse_transform(df_gd, self.sample_tech).sort_index()
 
         generated_data = generated_data.rename(columns=self._underscore_column_mapping)
 
