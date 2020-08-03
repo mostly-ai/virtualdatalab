@@ -1,5 +1,7 @@
 import pandas as pd
 import functools
+import random
+from scipy.special import softmax
 
 from virtualdatalab.target_data_manipulation import _generate_column_type_dictionary
 from virtualdatalab.synthesizers.utils import _assign_column_type
@@ -34,6 +36,8 @@ class FlatStandardOneHot(DataProcessor):
 
     Standardize numeric columns (subtract mean and divide by std)
     One hot encoding for categorical columns
+
+    If there is categorical variables, target values are appended at the end for cross entropy calculations
     """
 
     def transform(self, data):
@@ -43,11 +47,49 @@ class FlatStandardOneHot(DataProcessor):
         df_category = data_copy.select_dtypes(include='category')
 
         if not df_category.empty:
+
             df_category_dummies = pd.get_dummies(df_category)
-            df_category_wide = df_category_dummies.unstack().fillna(-1)
-            df_category_wide.columns = df_category_wide.columns.map(lambda x: '{}_{}'.format(x[0], x[1]))
-            df_category_wide = df_category_wide.apply(lambda x: pd.Categorical(x))
-            dfs_to_merge.append(df_category_wide)
+            df_category_wide = df_category_dummies.unstack().fillna(0)
+            df_category_wide.columns = df_category_wide.columns.map(lambda x: '{}_{}'.format(x[1], x[0]))
+            df_category_wide = df_category_wide.sort_index(axis=1)
+
+            possible_sequence_lengths = list(set([int(x.split("_")[0]) for x in df_category_wide.columns]))
+
+            category_columns = df_category.columns
+            target_dataframe_dict = {}
+            category_column_mapping = {}
+            target_dataframe_list = {}
+            first_pos = 0
+            column_ordering = []
+            column_idx_original = {}
+
+            for category_column in category_columns:
+                target_categories = []
+                column_mapping = {}
+                subset_category_columns = [x for x in df_category_wide.columns if category_column in x]
+                for seq_length in possible_sequence_lengths:
+                    columns = [x for x in subset_category_columns if seq_length == int(x.split("_")[0])]
+                    column_ordering.extend(columns)
+                    second_pos = first_pos + len(columns)
+                    df_sliced = df_category_wide[columns]
+                    mapping = {
+                        col: idx for idx, col in enumerate(columns)
+                    }
+                    column_mapping[str(seq_length)] = columns
+                    df_map = pd.DataFrame(df_category_wide[columns].idxmax(axis="columns").map(mapping),
+                                          columns=[f"idx_{first_pos}_{second_pos}"])
+                    first_pos = second_pos
+                    target_categories.append(df_map)
+
+                category_column_mapping[category_column] = column_mapping
+                category_target = pd.concat(target_categories, axis=1)
+                target_dataframe_list[category_column] = category_target
+                column_idx_original[category_column] = [[pos, name] for pos, name in enumerate(category_target.columns)]
+
+            self._category_column_mapping = category_column_mapping
+            # needed for loss
+
+            dfs_to_merge.append(df_category_wide.apply(lambda x: pd.Categorical(x))[column_ordering])
 
         df_numerics = data_copy.select_dtypes(include='number')
 
@@ -66,100 +108,85 @@ class FlatStandardOneHot(DataProcessor):
 
         self.original_column_mapping = _generate_column_type_dictionary(data)
         self.column_mapping = _generate_column_type_dictionary(transformed_data)
-        # needed for loss
         self.idx_mapping = {idx: self.column_mapping[x] for idx, x in enumerate(transformed_data.columns)}
+        self._last_index = None
+        self._category_idx_real_data = None
+
+        # data will need to have targets for loss
+        if not df_category.empty:
+            self._last_index = transformed_data.shape[1]
+            self._category_idx_real_data = {}
+            end_idx = transformed_data.shape[1]
+            for cat_col_name, cat_target_dataframe in target_dataframe_list.items():
+                transformed_data = pd.concat([transformed_data, cat_target_dataframe], axis=1)
+                pos_info = column_idx_original[cat_col_name]
+                self._category_idx_real_data[cat_col_name] = {name: pos + end_idx for pos, name in pos_info}
+                end_idx = end_idx + cat_target_dataframe.shape[1]
 
         return transformed_data
 
-    def inverse_transform(self, transformed_data):
-        data_copy_wide = transformed_data.copy(deep=True)
-        data_copy_wide = _assign_column_type(data_copy_wide, self.column_mapping)
-        dfs_to_merge = []
-
+    def inverse_transform(self, transformed_data, categorical_selection):
+        to_merge_all = []
 
         types_to_transform = ['number', 'category']
 
         for type_to_transform in types_to_transform:
-            df_sample_tranform = data_copy_wide.select_dtypes(include=type_to_transform)
 
-            if not df_sample_tranform.empty:
+            transform_columns = [key for key, pair in self.column_mapping.items() if pair == type_to_transform]
+            df_sample_transform = transformed_data[transform_columns]
 
-                df_column = pd.DataFrame({"original_col_name": [x.split("_")[0] for x in df_sample_tranform.columns],
-                                          "generated_col_name": df_sample_tranform.columns})
+            if not df_sample_transform.empty:
 
-                unique_columns = df_column['original_col_name'].unique()
+                if type_to_transform == 'number':
 
-                concat_column_list = []
+                    df_inv = ((df_sample_transform * self._transformer_std) + self._transformer_mean)
+                    df_inv.loc[:, 'id'] = df_inv.index
+                    df_melt = df_inv.melt(id_vars='id')
+                    df_melt['col_name'] = df_melt['variable'].apply(lambda x: x.split("_")[0])
+                    df_melt['sequence_pos'] = df_melt['variable'].apply(lambda x: x.split("_")[1])
+                    df_pivot = df_melt.drop('variable', 1).pivot_table(index=['id', 'sequence_pos'], columns='col_name')
+                    df_pivot.columns = [x[1] for x in df_pivot.columns]
 
-                for unique_column in unique_columns:
-                    """
-                    ex 
-                    unique_columns = cd
-                    sub_column = cd_0_1
-                    """
-                    sub_columns = df_column[df_column['original_col_name'] == unique_column][
-                        "generated_col_name"].values
-                    df_one_column_list = []
+                    to_merge_all.append(df_pivot)
 
-                    for sub_column in sub_columns:
-                        split = sub_column.split("_")
-                        col_name = split[0]
+                elif type_to_transform == 'category':
+                    to_merge_categoricals = []
+                    for category, sequence_mapping_dict in self._category_column_mapping.items():
+                        categorical_values = []
+                        for sequence_pos, column_mapping in sequence_mapping_dict.items():
+                            df_slice = df_sample_transform[column_mapping]
+                            if categorical_selection == 'max':
+                                df_results = pd.DataFrame(df_slice.idxmax(axis=1), columns=['value'])
+                            elif categorical_selection == 'sampling':
+                                def f(x):
+                                    return random.choices(df_slice.columns, weights=softmax(x))[0]
 
-                        # ✧･ﾟ: *✧･ﾟ:* *:･ﾟwday_nan_4✧*:･ﾟ✧
-                        if type_to_transform == 'category':
-                            category = split[1]
-                            sequence_pos = split[-1]
-                        elif type_to_transform == 'number':
-                            sequence_pos = split[1]
-                        else:
-                            raise Exception('Type not recognized')
-                        # ✧･ﾟ: *✧･ﾟ:* *:･ﾟ✧*:･ﾟ✧
-
-                        mini_copy = df_sample_tranform[[sub_column]].copy(deep=True)
-                        mini_copy.loc[:, 'sequence_pos'] = int(sequence_pos)
-
-                        # ✧･ﾟ: *✧･ﾟ:* *:･ﾟ✧*:･ﾟ✧
-                        if type_to_transform == 'category':
-                            mini_copy.columns = ['val', 'sequence_pos']
-                            mini_copy.loc[:, col_name] = category
-
-                            if not mini_copy[mini_copy['val'] != 0].empty:
-                                df_one_column_list.append(mini_copy[mini_copy['val'] != 0].drop('val', 1))
+                                df_results = pd.DataFrame(df_slice.apply(lambda x: f(x), axis=1), columns=['value'])
                             else:
-                                df_one_column_list.append(mini_copy.drop('val',1))
+                                raise Exception("categorical_selection is not max or sampling")
+                            df_results = df_results['value'].str.split("_", expand=True).drop(1, 1)
+                            df_results.columns = ['sequence_pos', category]
+                            df_results.reset_index(inplace=True)
+                            df_results.set_index(['id', 'sequence_pos'], inplace=True)
+                            categorical_values.append(df_results)
 
-                        elif type_to_transform == 'number':
-                            mini_copy.columns = [col_name, 'sequence_pos']
-                            mini_copy.loc[:, col_name] = (mini_copy.loc[:, col_name] * self._transformer_std.loc[
-                                sub_column]) + \
-                                                         self._transformer_mean.loc[sub_column]
-                            df_one_column_list.append(mini_copy)
-                        else:
-                            raise Exception(
-                                'Type not recognized')
+                        to_merge_categoricals.append(pd.concat(categorical_values))
 
-                        # ✧･ﾟ: *✧･ﾟ:* *:･ﾟ✧*:･ﾟ✧
+                    if len(to_merge_categoricals) > 1:
+                        df_column_cat = functools.reduce(
+                            lambda left, right: pd.merge(left, right, on=['id', 'sequence_pos']), to_merge_categoricals)
+                    else:
+                        df_column_cat = to_merge_categoricals[0]
 
-                    df_one_columns = pd.concat(df_one_column_list)
-                    concat_column_list.append(df_one_columns)
+                    to_merge_all.append(df_column_cat)
 
-                if len(concat_column_list) > 1:
-                    df_column_all = functools.reduce(
-                        lambda left, right: pd.merge(left, right, on=['id', 'sequence_pos']), concat_column_list)
-                else:
-                    df_column_all = concat_column_list[0]
-
-                dfs_to_merge.append(df_column_all)
-
-        if len(dfs_to_merge) > 1:
-            detransformed_data = functools.reduce(lambda left, right: pd.merge(left, right, on=['id', 'sequence_pos'],how='left'),
-                                                  dfs_to_merge)
+        if len(to_merge_all) > 1:
+            detransformed_data = functools.reduce(
+                lambda left, right: pd.merge(left, right, on=['id', 'sequence_pos'], how='left'),
+                to_merge_all)
         else:
-            detransformed_data = dfs_to_merge[0]
+            detransformed_data = to_merge_all[0]
 
-        detransformed_data = detransformed_data.reset_index().set_index(['id', 'sequence_pos'])
-        detransformed_data = detransformed_data[~detransformed_data.index.duplicated()]
-        # types are lost from multiple merges
         detransformed_data = _assign_column_type(detransformed_data, self.original_column_mapping)
 
-        return detransformed_data.sort_index()
+        return detransformed_data
