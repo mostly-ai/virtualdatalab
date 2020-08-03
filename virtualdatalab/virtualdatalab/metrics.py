@@ -24,8 +24,13 @@ import scipy.stats as ss
 from sklearn.neighbors import NearestNeighbors
 from numpy import array
 
+### remvove
+import time
+
 from virtualdatalab.synthesizers.utils import check_common_data_format
 from virtualdatalab.target_data_manipulation import _generate_column_type_dictionary
+
+from virtualdatalab.cython.cython_metric import mixed_distance
 
 """
 <*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*>
@@ -450,7 +455,6 @@ def _calculate_correlation(group_data, columns):
 
     return normalized_correlations
 
-
 def _get_nn_model(train: DataFrame, cat_slice: int) -> Tuple[np.ndarray]:
     """
     Find nearest neighbors of test in train with first categoric_slice-many variables being categorical.
@@ -461,35 +465,8 @@ def _get_nn_model(train: DataFrame, cat_slice: int) -> Tuple[np.ndarray]:
     :returns: scikit learn nearest_neighbor_model fit with train data
 
     """
-
-    def mixed_distance(x: array,
-                       y: array,
-                       cat_slice: int) -> array:
-        """
-        Distance metric for NN-Model that can handled mixed types.
-
-        The categorical distance computes a bool value if they are not equal.
-        The numeric columns distance is subtraction
-
-        :param x: x array
-        :param y: y array
-        :param cat_slice: where category columns end in the given array
-
-        :returns: res
-
-
-        """
-        n = len(x)
-        res = 0
-
-        for i in range(cat_slice):
-            res += abs(x[i] != y[i])
-        for i in range(cat_slice, n):
-            res += abs(x[i] - y[i])
-        return res
-
     nearest_neighbor_model = NearestNeighbors(
-        metric=lambda x, y: mixed_distance(x, y, cat_slice=cat_slice),
+        metric=lambda x, y: mixed_distance(x, y, cat_slice),
         algorithm="ball_tree",
         n_jobs=None,
     )
