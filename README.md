@@ -32,6 +32,7 @@ Synthesizers and public functions accept only data formatted according to the fo
 * `id` (denoting a subject) `sequence_pos` (order of sequences belonging to one subject) as index
 * columns are either of type `numeric` or `categorical`
 * single table (subject and sequence information is in single table)
+* No NaN values. NaN values in categorical columns will be treated as the empty string ""
 
 `target_data_manipulation.prepare_common_data_format` is a helper function to convert a given Pandas DataFrame or CSV into the  **common data format**.
 

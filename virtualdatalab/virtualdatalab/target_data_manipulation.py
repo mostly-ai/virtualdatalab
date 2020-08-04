@@ -67,8 +67,11 @@ def prepare_common_data_format(fp: Any,
         if col in cat_columns_convert:
             df.loc[:, col] = pd.Categorical(df[col])
             # nan needs to be considered a category
-            df.loc[:, col]  = df.loc[:, col].cat.add_categories("nan").fillna("nan")
+            if df.loc[:, col].isnull().sum() != 0:
+                df.loc[:, col] = df.loc[:, col].cat.add_categories("").fillna("")
         elif col in num_columns_convert:
+            # throw error when nan in cols
+            assert df.loc[:, col].isnull().sum() == 0, "Numeric columns contain NaN values"
             df.loc[:, col] = pd.to_numeric(df[col])
 
     df['sequence_pos'] = df.groupby('id').cumcount()

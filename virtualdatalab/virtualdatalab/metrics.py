@@ -22,10 +22,6 @@ from pandas import DataFrame,Series
 from typing import List,Tuple,Dict, Callable
 import scipy.stats as ss
 from sklearn.neighbors import NearestNeighbors
-from numpy import array
-
-### remvove
-import time
 
 from virtualdatalab.synthesizers.utils import check_common_data_format
 from virtualdatalab.target_data_manipulation import _generate_column_type_dictionary
@@ -49,133 +45,28 @@ Data Preprocessing Functions
 
 """
 
-
-
-def _sample_data(data: DataFrame,
-                 sampling_tech: str = 'random') -> DataFrame:
-    """
-    Sample two consecutive records from a sequential data set.
-
-    This is used as a utility function to do data preprocessing for metric calculations.
-
-    :param data: pandas DataFrame to sample from
-    :param sampling_tech {random,first,last,all}: how to sample
-    random - random sample
-    first - take two first consecutive records
-    last - take last consecutive records
-    all - take whole dataframe (equiv. returning)
-
-    :returns: sample dataframe with col 'record_pos' denoting if it is the first record or second record, if sampling_tech is
-    all this is a column of -1
-    """
-
-    data_copy = data.copy(deep=True).reset_index()
-
-    def _sample_per_group(test_group: DataFrame,
-                          sampling_technique: str) -> DataFrame:
-        """
-        Sample within group
-
-        """
-
-        all_sequence_pos = list(test_group['sequence_pos'])
-
-
-
-        if sampling_technique == 'random':
-            # trim off last entry as we want to ensure they have consecutive record
-            first_record_sample = np.random.choice(all_sequence_pos[:-1])
-        elif sampling_technique == 'first':
-            first_record_sample = 0
-        elif sampling_technique == 'last':
-            if len(all_sequence_pos) > 1:
-                first_record_sample = all_sequence_pos[-2]
-            else:
-                first_record_sample = all_sequence_pos[-1]
-
-        # pick out second sequence_pos
-        if len(all_sequence_pos) > 1:
-            # some synthetic data will have nonconsecutive sequence positions
-            first_record_sample_index = np.where(all_sequence_pos==first_record_sample)[0][0]
-            second_record_sample = all_sequence_pos[first_record_sample_index+1]
-        else:
-            second_record_sample = None
-
-        sampled_records = test_group[test_group['sequence_pos'].isin([first_record_sample, second_record_sample])]
-        sampled_records['record_pos'] = [0, 1]
-
-        return sampled_records
-
-    if sampling_tech == 'all':
-        data_sample = data_copy.copy(deep=True)
-        data_sample['record_pos'] = -1
-        return data_sample
-    else:
-        # drop records with 1 sequence length
-        data_reset = data_copy.reset_index(drop=True)
-        seq_counts = data_reset.groupby('id').count()['sequence_pos']
-        ids_to_keep = seq_counts[seq_counts > 1].index
-        data_copy_more_than_one = data_reset[data_reset['id'].isin(ids_to_keep)]
-
-        data_sample = data_copy_more_than_one.groupby('id', group_keys=False).apply(lambda x: _sample_per_group(x, sampling_tech))
-        return data_sample
-
-
-def _flatten_table(data: DataFrame, column_type_dictionary: dict) -> DataFrame:
-    """
-
-    Flatten a table from long format into wide format.
-
-    Long format
-
-    | id | col_1 | col_2 | record_pos | sequence_pos |
-    |----|-------|-------|------------|--------------|
-    | 1  | a     | 10    | 1          | 3            |
-    | 1  | b     | 20    | 2          | 4            |
-    | 2  | c     | 30    | 1          | 0            |
-    | 2  | d     | 40    | 2          | 1            |
-
-    Wide format
-
-    | id | col_a_1 | col_a_2 | col_b_1 | col_b_2 |
-    |----|---------|---------|---------|---------|
-    | 1  | a       | b       | 10      | 20      |
-    | 2  | c       | d       | 30      | 40      |
-
-    This is used as a utility function to do data preprocessing for metric calculations.
-
-    Note: Sequence pos and record pos is dropped from returned dataframe.
-
-    :param data: Pandas Dataframe
-    :param column_type_dictionary: dict mapping columns to types. Note, pandas.pivot() coerces types so we need to reassign them.
-
-    :returns: wide Pandas DataFrame
+def _sample_one_event(data: DataFrame) -> DataFrame:
 
     """
+    Randomly sample one record for each id.
+    """    # determine sequence length for each id
+    seq_lens = data.reset_index().groupby('id').size()    # randomly draw a sequence_pos for each id
+    draws = pd.DataFrame({'sequence_pos': np.floor(np.random.rand(len(seq_lens)) * seq_lens).astype(int)}).reset_index()    # inner join with provided dataframe to filter to drawn records
+    out = pd.merge(draws, data, on=['id', 'sequence_pos']).drop(columns='sequence_pos').set_index('id')
+    return out
 
-    to_exclude = ['sequence_pos', 'record_pos', 'id']
-    col_to_melt = [x for x in data.columns if x not in to_exclude]
-    if -1 in data['record_pos'].unique():
-        pivot = data.pivot(index='id', columns='sequence_pos', values=col_to_melt)
-    else:
-        pivot = data.pivot(index='id', columns='record_pos', values=col_to_melt)
-
-    # Lots of extra steps because pandas.pivot does not preserve column type
-
-    new_columns = ["{}_{}".format(x[0], x[1]) for x in pivot.columns]
-    original_columns_family = ["{}".format(x[0]) for x in pivot.columns]
-    new_columns_to_family = dict(zip(new_columns, original_columns_family))
-    pivot.columns = new_columns
-
-    for col in pivot:
-        original_col_type = column_type_dictionary[new_columns_to_family[col]]
-        if original_col_type == 'category':
-            pivot[col] = pd.Categorical(pivot[col])
-        elif original_col_type == 'number':
-            pivot[col] = pd.to_numeric(pivot[col])
-
-    return pivot
-
+def _sample_two_events(data: DataFrame) -> DataFrame:
+    """
+    Randomly sample two consecutive records for each id, and flatten into one row per id.
+    """    # determine sequence length for each id
+    seq_lens = data.reset_index().groupby('id').size()    # filter to those ids that have at least two records
+    seq_lens = seq_lens[seq_lens>=2]    # randomly draw a sequence_pos (excl last item) for each id
+    draws1 = pd.DataFrame({'sequence_pos': np.floor(np.random.rand(len(seq_lens)) * (seq_lens-1)).astype(int)})
+    draws2 = draws1 + 1    # inner join with provided dataframe to filter to drawn records
+    item1 = pd.merge(draws1.reset_index(), data, on=['id', 'sequence_pos']).drop(columns='sequence_pos')
+    item2 = pd.merge(draws2.reset_index(), data, on=['id', 'sequence_pos']).drop(columns='sequence_pos')
+    out = pd.merge(item1, item2, on='id', suffixes=['_0', '_1']).set_index('id')
+    return out
 
 def _bin_data(target_col,
               syn_col,
@@ -219,6 +110,67 @@ def _bin_data(target_col,
         raise Exception("Col type not recognized")
 
     return binned_target, binned_syn
+
+def _bin_looped(target,synthetic,column_dictionary,number_of_bins):
+    t = pd.DataFrame()
+    s = pd.DataFrame()
+    for col, col_type in column_dictionary.items():
+        binned_target, binned_syn = _bin_data(target[col], synthetic[col], col_type, number_of_bins)
+        t[col] = binned_target
+        s[col] = binned_syn
+    return t,s
+
+def _flatten_table(data: DataFrame, column_type_dictionary: dict) -> DataFrame:
+    """
+
+    Flatten a table from long format into wide format.
+
+    Long format
+
+    | id | col_1 | col_2 | record_pos | sequence_pos |
+    |----|-------|-------|------------|--------------|
+    | 1  | a     | 10    | 1          | 3            |
+    | 1  | b     | 20    | 2          | 4            |
+    | 2  | c     | 30    | 1          | 0            |
+    | 2  | d     | 40    | 2          | 1            |
+
+    Wide format
+
+    | id | col_a_1 | col_a_2 | col_b_1 | col_b_2 |
+    |----|---------|---------|---------|---------|
+    | 1  | a       | b       | 10      | 20      |
+    | 2  | c       | d       | 30      | 40      |
+
+    This is used as a utility function to do data preprocessing for metric calculations.
+
+    Note: Sequence pos and record pos is dropped from returned dataframe.
+
+    :param data: Pandas Dataframe
+    :param column_type_dictionary: dict mapping columns to types. Note, pandas.pivot() coerces types so we need to reassign them.
+
+    :returns: wide Pandas DataFrame
+
+    """
+
+    to_exclude = ['sequence_pos', 'record_pos', 'id']
+    col_to_melt = [x for x in data.columns if x not in to_exclude]
+    pivot = data.pivot(index='id', columns='sequence_pos', values=col_to_melt)
+
+    # Lots of extra steps because pandas.pivot does not preserve column type
+
+    new_columns = ["{}_{}".format(x[0], x[1]) for x in pivot.columns]
+    original_columns_family = ["{}".format(x[0]) for x in pivot.columns]
+    new_columns_to_family = dict(zip(new_columns, original_columns_family))
+    pivot.columns = new_columns
+
+    for col in pivot:
+        original_col_type = column_type_dictionary[new_columns_to_family[col]]
+        if original_col_type == 'category':
+            pivot[col] = pd.Categorical(pivot[col])
+        elif original_col_type == 'number':
+            pivot[col] = pd.to_numeric(pivot[col])
+
+    return pivot
 
 
 def _prepare_data_for_privacy_metrics(target_data: DataFrame,
@@ -770,9 +722,9 @@ def _calculate_accuracy_metric(target_data:DataFrame,
     """
 
     dictionary_functions = {
-        'median':np.median,
-        'mean':np.mean,
-        'max':np.max
+        'median': np.median,
+        'mean': np.mean,
+        'max': np.max
 
     }
 
@@ -792,26 +744,6 @@ def _calculate_accuracy_metric(target_data:DataFrame,
     assert sorted(target_data.columns) == sorted(synthetic_data.columns), "Target and Synthetic have different columns"
 
     original_column_type_dictionary = _generate_column_type_dictionary(target_data)
-    synthetic_column_type_dictionary = _generate_column_type_dictionary(synthetic_data)
-
-    assert original_column_type_dictionary == synthetic_column_type_dictionary, "Target and Synthetic have different types"
-
-    sampled_data_target = _sample_data(target_data, 'random')
-    sampled_data_syn = _sample_data(synthetic_data, 'random')
-
-    flat_table_target = _flatten_table(sampled_data_target, original_column_type_dictionary)
-    flat_table_syn = _flatten_table(sampled_data_syn, original_column_type_dictionary)
-
-    # columns now include 1st and 2nd record
-    new_column_type_dictionary = _generate_column_type_dictionary(flat_table_target)
-
-    df_binned_target = pd.DataFrame()
-    df_binned_syn = pd.DataFrame()
-
-    for col, col_type in new_column_type_dictionary.items():
-        binned_target, binned_syn = _bin_data(flat_table_target[col], flat_table_syn[col], col_type, number_of_bins)
-        df_binned_target[col] = binned_target
-        df_binned_syn[col] = binned_syn
 
     """
     .:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:.
@@ -822,18 +754,43 @@ def _calculate_accuracy_metric(target_data:DataFrame,
     """
 
     if metric_func_name == 'uni_etvd':
-        univariate_values = []
-        for col_name, col_type in new_column_type_dictionary.items():
-            univariate_values.append(_uni_etvd(df_binned_target[col_name],
-                                              df_binned_syn[col_name],
-                                              col_type=col_type))
+        '''
+        Data Prep
+        '''
+        sample_one_target = _sample_one_event(target_data)
+        sample_one_synthetic = _sample_one_event(synthetic_data)
 
-        df_univariate = pd.DataFrame({'col_names': list(new_column_type_dictionary.keys()),
+        one_t_binned, one_s_binned = _bin_looped(sample_one_target,
+                                                 sample_one_synthetic,
+                                                 original_column_type_dictionary,
+                                                 number_of_bins)
+
+        univariate_values = []
+        for col_name, col_type in original_column_type_dictionary.items():
+            univariate_values.append(_uni_etvd(one_t_binned[col_name],
+                                               one_s_binned[col_name],
+                                               col_type=col_type))
+
+        df_univariate = pd.DataFrame({'col_names': list(original_column_type_dictionary.keys()),
                                       'uni_values': univariate_values})
 
         summary = summary_func(univariate_values)
+
     elif metric_func_name == 'bi_etvd':
-        column_pairings = product(new_column_type_dictionary.keys(), new_column_type_dictionary.keys())
+        '''
+        Data Prep
+        '''
+        sample_one_target = _sample_one_event(target_data)
+        sample_one_synthetic = _sample_one_event(synthetic_data)
+
+        one_t_binned, one_s_binned = _bin_looped(sample_one_target,
+                                                 sample_one_synthetic,
+                                                 original_column_type_dictionary,
+                                                 number_of_bins)
+        column_pairings = product(original_column_type_dictionary.keys(), original_column_type_dictionary.keys())
+        '''
+        Calculations
+        '''
 
         bivariate_values = []
         column_one_pair = []
@@ -846,26 +803,38 @@ def _calculate_accuracy_metric(target_data:DataFrame,
             column_two_pair.append(column_two)
             if column_one == column_two:
                 # skip if column is duplicated
-                bi_val = 'na'
-            elif "_".join(column_one.split("_")[:-1]) == "_".join(column_two.split("_")[:-1]):
-                # skip if column consecutive records
-                bi_val = 'na'
+                bi_val = np.nan
             else:
-                bi_val = _bi_etvd(df_binned_target[[column_one, column_two]],
-                                 df_binned_syn[[column_one, column_two]],
-                                 column_one,
-                                 column_two)
+                bi_val = _bi_etvd(one_t_binned[[column_one, column_two]],
+                                  one_s_binned[[column_one, column_two]],
+                                  column_one,
+                                  column_two)
 
             bivariate_values.append(bi_val)
 
         df_bivariate = pd.DataFrame({'col_one': column_one_pair,
                                      'col_two': column_two_pair,
-                                     'bi_vals': bivariate_values})
-        summary = summary_func([val for val in bivariate_values if val != 'na'])
-    elif metric_func_name == 'correlation':
+                                     'bi_vals': bivariate_values}).dropna()
+        summary = summary_func(df_bivariate['bi_vals'])
 
-        target_correlations = _calculate_correlation(df_binned_target, list(new_column_type_dictionary.keys())).fillna(0)
-        syn_correlations = _calculate_correlation(df_binned_syn, list(new_column_type_dictionary.keys())).fillna(0)
+    elif metric_func_name == 'correlation':
+        '''
+        Data Prep
+        '''
+        sample_two_target = _sample_two_events(target_data)
+        sample_two_synthetic = _sample_two_events(synthetic_data)
+        new_column_type_dictionary = _generate_column_type_dictionary(sample_two_target)
+
+        two_t_binned, two_s_binned = _bin_looped(sample_two_target,
+                                                 sample_two_synthetic,
+                                                 new_column_type_dictionary,
+                                                 number_of_bins)
+        '''
+        Calculations
+        '''
+
+        target_correlations = _calculate_correlation(two_t_binned, list(new_column_type_dictionary.keys())).fillna(0)
+        syn_correlations = _calculate_correlation(two_s_binned, list(new_column_type_dictionary.keys())).fillna(0)
 
         correlation_differences = abs(
             target_correlations - syn_correlations.loc[target_correlations.index, target_correlations.columns])
@@ -922,11 +891,8 @@ def _calculate_privacy_metric(target_data:DataFrame,
 
     assert original_column_type_dictionary == synthetic_column_type_dictionary, "Target and Synthetic have different types"
 
-    sampled_data_target = _sample_data(target_data, 'all')
-    sampled_data_syn = _sample_data(synthetic_data, 'all')
-
-    flat_table_target = _flatten_table(sampled_data_target, original_column_type_dictionary)
-    flat_table_syn = _flatten_table(sampled_data_syn, original_column_type_dictionary)
+    flat_table_target = _flatten_table(target_data.reset_index(), original_column_type_dictionary)
+    flat_table_syn = _flatten_table(synthetic_data.reset_index(), original_column_type_dictionary)
 
     # columns now include 1st and 2nd record
     new_column_type_dictionary = _generate_column_type_dictionary(flat_table_target)

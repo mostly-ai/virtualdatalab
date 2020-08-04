@@ -143,7 +143,7 @@ class FlatStandardOneHot(DataProcessor):
                     df_inv.loc[:, 'id'] = df_inv.index
                     df_melt = df_inv.melt(id_vars='id')
                     df_melt['col_name'] = df_melt['variable'].apply(lambda x: x.split("_")[0])
-                    df_melt['sequence_pos'] = df_melt['variable'].apply(lambda x: x.split("_")[1])
+                    df_melt['sequence_pos'] = df_melt['variable'].apply(lambda x: int(x.split("_")[1]))
                     df_pivot = df_melt.drop('variable', 1).pivot_table(index=['id', 'sequence_pos'], columns='col_name')
                     df_pivot.columns = [x[1] for x in df_pivot.columns]
 
@@ -166,6 +166,7 @@ class FlatStandardOneHot(DataProcessor):
                                 raise Exception("categorical_selection is not max or sampling")
                             df_results = df_results['value'].str.split("_", expand=True).drop(1, 1)
                             df_results.columns = ['sequence_pos', category]
+                            df_results['sequence_pos'] = df_results['sequence_pos'].astype(int)
                             df_results.reset_index(inplace=True)
                             df_results.set_index(['id', 'sequence_pos'], inplace=True)
                             categorical_values.append(df_results)
