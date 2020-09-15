@@ -34,6 +34,7 @@ Synthesizers and public functions accept only data formatted according to the fo
 * DataFrame columns are either of type `numeric` or `categorical`
 * No NaN values. NaN values in categorical columns will be treated as the empty string
 
+The helper method `target_data_manipulation.prepare_common_data_format` can read in CSV files, and provides data in the required format.
 
 ## Features
 
