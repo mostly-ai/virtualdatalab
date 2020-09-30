@@ -154,25 +154,9 @@ def split_train_val(dataset, val_percent = .10):
     return train, holdout
 
 def _generate_column_type_dictionary(data) -> dict:
-    """
-    Generate a
-
-    :param data:
-
-    :returns: column_type_dict: dictionary value of col names type
-
-    {
-        'num_col_0':'numeric',
-        'cat_col_0':'category'
-    }
-
-
-    """
     column_types = dict(zip(data.dtypes.index, data.dtypes))
-
     column_type_dict = {}
     true_vector = []
-
     for col_name, dtype in column_types.items():
         if is_numeric_dtype(dtype):
             column_type_dict[col_name] = 'number'
@@ -182,9 +166,5 @@ def _generate_column_type_dictionary(data) -> dict:
             true_vector.append(True)
         else:
             true_vector.append(False)
-
     assert sum(true_vector) == len(data.columns), " Data must only have number and category column types"
-
-
-
     return column_type_dict
