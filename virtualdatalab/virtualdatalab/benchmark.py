@@ -11,21 +11,14 @@ from pandas import DataFrame
 import numpy as np
 import pandas as pd
 
-
-import logging
+import time
 
 from virtualdatalab.metrics import compare
 from virtualdatalab.datasets.loader import load_cdnow,load_berka,load_mlb
+from virtualdatalab.logging import getLogger
 
-import time
-
-logging.basicConfig(filename='benchmark.log',
-                    level=logging.DEBUG,
-                    filemode='w',
-                    format="%(asctime)s;%(levelname)s;%(message)s",
-                    datefmt= "%Y-%m-%d %H:%M:%S")
-
-LOGGER = logging.getLogger(__name__)
+# Get a Logger for this module
+LOGGER = getLogger(__name__)
 
 def benchmark(syntheizers_classes:List[Type],
               datasets:Dict[str,DataFrame]={},
