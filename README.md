@@ -89,7 +89,7 @@ The helper method `target_data_manipulation.prepare_common_data_format` can read
 
 `benchmark` takes a simple combination of the metrics below to output one indicator per type.
 
-![Screenshot](readme_imgs/benchmark_example.png)
+![Screenshot](readme_imgs/benchmark.png)
 
 ### Accuracy
 
