@@ -1,7 +1,7 @@
 from virtualdatalab.synthesizers.utils import check_is_fitted, check_common_data_format
-import logging
+from virtualdatalab.logging import getLogger
 
-LOGGER = logging.getLogger(__name__)
+LOGGER = getLogger(__name__)
 
 class BaseSynthesizer:
     ''' Base class for Synthesizer'''
