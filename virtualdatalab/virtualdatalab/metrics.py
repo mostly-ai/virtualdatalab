@@ -461,10 +461,11 @@ def _calculate_dcr_nndr(tgt_data: DataFrame,
 
 def _calculate_statistical_distances(tgt_data:DataFrame,
                                      syn_data:DataFrame,
-                                     type: str, # univariate | bivariate
-                                     number_of_bins:int = 10):
+                                     type: str, # 1dim | 2dmin | 3dmin | 4dmin
+                                     number_of_bins:int = 10,
+                                     max_combinations:int = 100):
 
-    assert type in ['univariate', 'bivariate'], "type not recognized"
+    assert type in ['1dim', '2dim', '3dim', '4dim'], "type not recognized"
     # check if data is in expected format
     assert sorted(tgt_data.columns) == sorted(syn_data.columns), "Target and Synthetic have different columns"
     column_dict = _generate_column_type_dictionary(tgt_data)
@@ -475,6 +476,8 @@ def _calculate_statistical_distances(tgt_data:DataFrame,
                                          syn_sample,
                                          column_dict,
                                          number_of_bins)
+    tgt_binned = tgt_binned.astype(str)
+    syn_binned = syn_binned.astype(str)
 
     def calc_shares(df_binned, label):
         shares = df_binned.value_counts().reset_index()
@@ -482,27 +485,63 @@ def _calculate_statistical_distances(tgt_data:DataFrame,
         shares[label] = shares[label] / shares[label].sum()
         return shares
 
+    if type == '1dim':
+        cross = pd.DataFrame({'col_1': tgt_data.columns.to_list()})
+        cross['col_2'] = 'all'
+        cross['col_3'] = 'all'
+        cross['col_4'] = 'all'
+    elif type == '2dim':
+        cols_1 = pd.DataFrame({'col_1': tgt_data.columns.to_list(), 'key': 'xyz'})
+        cols_2 = pd.DataFrame({'col_2': tgt_data.columns.to_list(), 'key': 'xyz'})
+        cross = pd.merge(cols_1, cols_2, on='key').drop('key', axis=1)
+        cross['col_3'] = 'all'
+        cross['col_4'] = 'all'
+    elif type == '3dim':
+        cols_1 = pd.DataFrame({'col_1': tgt_data.columns.to_list(), 'key': 'xyz'})
+        cols_2 = pd.DataFrame({'col_2': tgt_data.columns.to_list(), 'key': 'xyz'})
+        cols_3 = pd.DataFrame({'col_3': tgt_data.columns.to_list(), 'key': 'xyz'})
+        cross = pd.merge(pd.merge(cols_1, cols_2, on='key'), cols_3, on='key').drop('key', axis=1)
+        cross['col_4'] = 'all'
+    elif type == '4dim':
+        cols_1 = pd.DataFrame({'col_1': tgt_data.columns.to_list(), 'key': 'xyz'})
+        cols_2 = pd.DataFrame({'col_2': tgt_data.columns.to_list(), 'key': 'xyz'})
+        cols_3 = pd.DataFrame({'col_3': tgt_data.columns.to_list(), 'key': 'xyz'})
+        cols_4 = pd.DataFrame({'col_4': tgt_data.columns.to_list(), 'key': 'xyz'})
+        cross = pd.merge(pd.merge(pd.merge(cols_1, cols_2, on='key'), cols_3, on='key'), cols_4, on='key').drop('key', axis=1)
+
+    cross = cross.sample(min(cross.shape[0], max_combinations))
+    tgt_binned['all'] = 'all'
+    syn_binned['all'] = 'all'
+
     result = list()
-    columns = column_dict.keys()
-    for col1 in columns:
-        for col2 in columns:
-            if (type=='univariate' and col1 == col2) or (type=='bivariate' and col1 < col2):
-                tgt_values = tgt_binned[col1].astype(str) + "|" + tgt_binned[col2].astype(str)
-                syn_values = syn_binned[col1].astype(str) + "|" + syn_binned[col2].astype(str)
-                shares = pd.merge(calc_shares(tgt_values, 'tgt'),
-                                  calc_shares(syn_values, 'syn'),
-                                  how='left')
-                shares['syn'] = shares['syn'].fillna(0)
-                diff = np.abs(shares['tgt'] - shares['syn'])
-                hell = np.sqrt(np.sum((np.sqrt(shares['tgt']) - np.sqrt(shares['syn'])) ** 2)) / np.sqrt(2)
-                out = pd.DataFrame({'col1': [col1],
-                                    'col2': [col2],
-                                    'type': type,
-                                    'tvd': np.max(diff),
-                                    'l1d': np.sum(diff),
-                                    'l2d': np.sqrt(np.sum(diff ** 2)),
-                                    'hellinger': hell})
-                result.append(out)
+    for i in range(cross.shape[0]):
+        col_1 = list(cross.col_1)[i]
+        col_2 = list(cross.col_2)[i]
+        col_3 = list(cross.col_3)[i]
+        col_4 = list(cross.col_4)[i]
+        col_label = col_1 + '|' + col_2 + '|' + col_3 + '|' + col_4
+        tgt_values = tgt_binned[col_1] + '|' + \
+                     tgt_binned[col_2] + '|' + \
+                     tgt_binned[col_3] + '|' + \
+                     tgt_binned[col_4]
+        syn_values = syn_binned[col_1] + '|' + \
+                     syn_binned[col_2] + '|' + \
+                     syn_binned[col_3] + '|' + \
+                     syn_binned[col_4]
+        shares = pd.merge(calc_shares(tgt_values, 'tgt'),
+                          calc_shares(syn_values, 'syn'),
+                          how='left')
+        shares['syn'] = shares['syn'].fillna(0)
+        diff = np.abs(shares['tgt'] - shares['syn'])
+        hell = np.sqrt(np.sum((np.sqrt(shares['tgt']) - np.sqrt(shares['syn'])) ** 2)) / np.sqrt(2)
+        out = pd.DataFrame({'label': [col_label],
+                            'type': type,
+                            'tvd': np.max(diff),
+                            'l1d': np.sum(diff),
+                            'l2d': np.sqrt(np.sum(diff ** 2)),
+                            'hellinger': hell})
+
+        result.append(out)
 
     return pd.concat(result)
 
@@ -528,6 +567,7 @@ def _calculate_privacy_tests(tgt_data: DataFrame,
     smoothing_factor = 1e-8
     tgt_data_p, syn_data_p = _prepare_data_for_privacy_metrics(flat_table_target, flat_table_syn,
                                                                column_dict, smoothing_factor)
+
     checks, privacy_tests = _calculate_dcr_nndr(tgt_data_p, syn_data_p, column_dict, smoothing_factor)
     return checks
 
@@ -550,15 +590,17 @@ def compare(tgt_data:DataFrame,
     metrics_dict = {}
 
     if 'statistical-distances' in metrics_to_return:
-        univariate = _calculate_statistical_distances(tgt_data, syn_data, 'univariate')
-        bivariate = _calculate_statistical_distances(tgt_data, syn_data, 'bivariate')
+        stat_1dim = _calculate_statistical_distances(tgt_data, syn_data, '1dim')
+        stat_2dim = _calculate_statistical_distances(tgt_data, syn_data, '2dim')
+        stat_3dim = _calculate_statistical_distances(tgt_data, syn_data, '3dim')
+        stat_4dim = _calculate_statistical_distances(tgt_data, syn_data, '4dim')
         def agg(x): return np.round(np.mean(x), 5)
-        metrics_dict['TVD 1dim'] = agg(univariate['tvd'])
-        metrics_dict['L1D 1dim'] = agg(univariate['l1d'])
-        metrics_dict['Hellinger 1dim'] = agg(univariate['hellinger'])
-        metrics_dict['TVD 2dim'] = agg(bivariate['tvd'])
-        metrics_dict['L1D 2dim'] = agg(bivariate['l1d'])
-        metrics_dict['Hellinger 2dim'] = agg(bivariate['hellinger'])
+        metrics_dict['Hellinger 1dim'] = agg(stat_1dim['hellinger'])
+        metrics_dict['TVD 1dim'] = agg(stat_1dim['tvd'])
+        metrics_dict['L1D 1dim'] = agg(stat_1dim['l1d'])
+        metrics_dict['L1D 2dim'] = agg(stat_2dim['l1d'])
+        metrics_dict['L1D 3dim'] = agg(stat_3dim['l1d'])
+        metrics_dict['L1D 4dim'] = agg(stat_4dim['l1d'])
 
     if 'privacy-tests' in metrics_to_return:
         checks = _calculate_privacy_tests(tgt_data, syn_data)
