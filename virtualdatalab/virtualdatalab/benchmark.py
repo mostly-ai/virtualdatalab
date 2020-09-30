@@ -78,11 +78,11 @@ def benchmark(syntheizers_classes:List[Type],
                 target_data_class = target_data
                 #  ｡ﾟ☆: *.☽ .* :☆ﾟ
                 end = time.time()
-                diff = end-start
+                diff = np.round(end - start)
                 if verbose:
-                    print(f"Training took {diff}")
+                    print(f"Training took {diff} seconds")
                 if log:
-                    LOGGER.info(f"Training took {diff}")
+                    LOGGER.info(f"Training took {diff} seconds")
 
                 start = time.time()
                 #  ｡ﾟ☆: *.☽ .* :☆ﾟ
@@ -94,11 +94,11 @@ def benchmark(syntheizers_classes:List[Type],
 
                 #  ｡ﾟ☆: *.☽ .* :☆ﾟ
                 end = time.time()
-                diff = end-start
+                diff = np.round(end - start)
                 if verbose:
-                    print(f"Generating took {diff}")
+                    print(f"Generating took {diff} seconds")
                 if log:
-                    LOGGER.info(f"Generating took {diff}")
+                    LOGGER.info(f"Generating took {diff} seconds")
 
                 start = time.time()
                 #  ｡ﾟ☆: *.☽ .* :☆ﾟ
@@ -111,11 +111,11 @@ def benchmark(syntheizers_classes:List[Type],
 
                 #  ｡ﾟ☆: *.☽ .* :☆ﾟ
                 end = time.time()
-                diff = end - start
+                diff = np.round(end - start)
                 if verbose:
-                    print(f"Comparing took {diff}")
+                    print(f"Comparing took {diff} seconds")
                 if log:
-                    LOGGER.info(f"Comparing took {diff}")
+                    LOGGER.info(f"Comparing took {diff} seconds")
             except Exception as e:
                 LOGGER.info(f"{syn_name} had {e}")
 

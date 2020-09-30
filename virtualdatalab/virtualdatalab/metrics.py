@@ -46,7 +46,6 @@ Data Preprocessing Functions
 """
 
 def _sample_one_event(data: DataFrame) -> DataFrame:
-
     """
     Randomly sample one record for each id.
     """    # determine sequence length for each id
@@ -73,52 +72,47 @@ def _bin_data(target_col,
               col_type: str,
               number_of_bins: int):
     """
-    Bin Wide Data
-
-    Numerics must have 10 distinct bins.
-
-    Category is left alone unless categories exceeds a given cardinality (100)
-
-
+    Bin single target/synthetic column.
     """
     if col_type == 'number':
-        filled_bins = 0
-        q = number_of_bins
-        while filled_bins < number_of_bins:
-            binned_target, bins = pd.qcut(target_col,q=q,retbins=True,duplicates='drop',precision=1)
-            filled_bins = sum(binned_target.value_counts()!=0)
-            q += 1
-        # if synthetic has categories not in target, na value will appear
-        # we drop this value
-        binned_syn = pd.cut(syn_col, bins=bins, include_lowest=True,precision=1).dropna()
+        cardinality = target_col.nunique()
+        if cardinality > number_of_bins:
+            filled_bins = 0
+            q = number_of_bins
+            while filled_bins < number_of_bins:
+                binned_target, bins = pd.qcut(target_col, q=q, retbins=True, duplicates='drop', precision=1)
+                filled_bins = sum(binned_target.value_counts() != 0)
+                q += 1
+        else:
+            bins = sorted(target_col.unique())
+        binned_target = pd.cut(target_col, bins=bins, include_lowest=True, precision=1)
+        # if synthetic has categories not in target, na value will appear, that we drop
+        binned_syn = pd.cut(syn_col, bins=bins, include_lowest=True, precision=1).dropna()
     elif col_type == 'category':
         cardinality = target_col.nunique()
-        if cardinality >= 100:
-            cut_off= 10
-            top_cat = target_col.value_counts().sort_values(ascending=False)[:cut_off-1].index
-            other = target_col.value_counts().sort_values(ascending=False)[cut_off-1:].index
-            first_dictionary = {cat: cat for cat in cut_off}
+        if cardinality > number_of_bins:
+            top_cat = target_col.value_counts().sort_values(ascending=False)[:number_of_bins-1].index.to_list()
+            other = target_col.value_counts().sort_values(ascending=False)[number_of_bins-1:].index.to_list()
+            first_dictionary = {cat: cat for cat in target_col.unique().to_list()}
             first_dictionary.update({cat: '*' for cat in other})
             binned_target = target_col.map(first_dictionary)
-            # if synthetic has categories not in target, na value will appear
-            # we drop this value
+            # if synthetic has categories not in target, na value will appear, that we drop
             binned_syn = syn_col.map(first_dictionary).dropna()
         else:
             binned_target = target_col
             binned_syn = syn_col
     else:
         raise Exception("Col type not recognized")
-
     return binned_target, binned_syn
 
-def _bin_looped(target,synthetic,column_dictionary,number_of_bins):
+def _bin_looped(target, synthetic, column_dictionary, number_of_bins):
     t = pd.DataFrame()
     s = pd.DataFrame()
     for col, col_type in column_dictionary.items():
         binned_target, binned_syn = _bin_data(target[col], synthetic[col], col_type, number_of_bins)
         t[col] = binned_target
         s[col] = binned_syn
-    return t,s
+    return t, s
 
 def _flatten_table(data: DataFrame, column_type_dictionary: dict) -> DataFrame:
     """
@@ -173,7 +167,7 @@ def _flatten_table(data: DataFrame, column_type_dictionary: dict) -> DataFrame:
     return pivot
 
 
-def _prepare_data_for_privacy_metrics(target_data: DataFrame,
+def _prepare_data_for_privacy_metrics(tgt_data: DataFrame,
                                       syn_data: DataFrame,
                                       column_dictionary: Dict,
                                       smoothing_factor:float) -> Tuple[DataFrame, DataFrame]:
@@ -183,7 +177,7 @@ def _prepare_data_for_privacy_metrics(target_data: DataFrame,
     For categorical, ordinal encoding based on joint set of target data and synthetic data.
     For numeric encoding, missing value are imputed with mean and standardized
 
-    :param target_data: pandas dataframe
+    :param tgt_data: pandas dataframe
     :param syn_data: pandas dataframe
     :param column_dictionary: column to type mapping
     :param smoothing_factor: smoothing factor
@@ -192,23 +186,23 @@ def _prepare_data_for_privacy_metrics(target_data: DataFrame,
     :returns: privacy ready target + synthetic  (pamdas DataFrame)
     """
 
-    target_data_p = target_data.copy(deep=True)
+    tgt_data_p = tgt_data.copy(deep=True)
     syn_data_p = syn_data.copy(deep=True)
 
     for column_name, column_type in column_dictionary.items():
         if column_type == 'category':
 
-            target_data_p[column_name] = target_data_p[column_name].cat.codes
+            tgt_data_p[column_name] = tgt_data_p[column_name].cat.codes
             syn_data_p[column_name] = syn_data_p[column_name].cat.codes
 
         elif column_type == 'number':
             # fill na data with mean
-            target_data_p[column_name] = target_data_p[column_name].fillna(target_data_p[column_name].dropna().mean())
+            tgt_data_p[column_name] = tgt_data_p[column_name].fillna(tgt_data_p[column_name].dropna().mean())
             syn_data_p[column_name] = syn_data_p[column_name].fillna(syn_data_p[column_name].dropna().mean())
 
             # standardize
-            target_data_p[column_name] = (target_data_p[column_name] - target_data_p[column_name].mean()) / np.max(
-                [target_data_p[column_name].std(), smoothing_factor])
+            tgt_data_p[column_name] = (tgt_data_p[column_name] - tgt_data_p[column_name].mean()) / np.max(
+                [tgt_data_p[column_name].std(), smoothing_factor])
             syn_data_p[column_name] = (syn_data_p[column_name] - syn_data_p[column_name].mean()) / np.max(
                 [syn_data_p[column_name].std(), smoothing_factor])
 
@@ -216,10 +210,10 @@ def _prepare_data_for_privacy_metrics(target_data: DataFrame,
             raise Exception(f'{column_type} Type not supported')
 
     # drop id col since it's not needed
-    target_data_p = target_data_p.reset_index().drop('id',1)
+    tgt_data_p = tgt_data_p.reset_index().drop('id',1)
     syn_data_p = syn_data_p.reset_index().drop('id',1)
 
-    return target_data_p,syn_data_p
+    return tgt_data_p,syn_data_p
 
 
 """
@@ -228,91 +222,47 @@ def _prepare_data_for_privacy_metrics(target_data: DataFrame,
 
 Metric Calculation Functions
 
-- they typically operate on a given column
-
-[x] _uni_etvd
-[x] _bi_etvd
-[x] _calculate_chisq_log related to calculate_correlation
-[x] _calculate_correlation
-[x] _get_nn_model
-[x] _calculate_dcr_nndr
-
 <*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*>
 <*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*>
 
 """
 
 
-def _uni_etvd(binned_target: Series,
-             binned_syn: Series,
-             col_type: str):
+def _uni_shares(binned_target: Series,
+                binned_syn: Series,
+                col_type: str):
     '''
-    Univariate Empirical Total Variation Distance (UETVD) is the max difference in proportions between the target col and synthetic col distribution.
-
-    Value is bounded between 0 and 1
-
-    Empirically it is calculated by
-    1.
-        i. For numeric values, cols are sorted into bins dervived from the target col
-        ii.For categorical values, cols are sorted into bins, if cardinality is very large the bins will condense into top 20 categories. The last category
-           will be a collection of everything past top 19.
-    2. Calculate the frequency for each bin.
-    3. Calculate the difference in frequency between target col and syn col
-    4. Max(difference) = UETVD
-
-    For cat columns, Steps 2-3 are executed
+    Calculate relative frequencies of an already binned target and synthetic column.
 
     :param binned_target: binned col from target data
-    :param syn_col: binned col from syn data
+    :param binned_syn: binned col from syn data
     :param col_type: numeric or categorical
-    :param number_of_bins: number of bins for numeric variable
 
-    return UETVD (abs percent difference)
-
-    Authored: 17.06.2020
+    return DataFrame with target and synthetic relative frequencies
     '''
-
-    def prep_binning(df_binned_raw, alt_col):
-        '''
-        Mini func to create prop of values in each bin
-        '''
-        binned_counts = df_binned_raw.value_counts().reset_index()
-        binned_counts.columns = ['bins', alt_col]
-        binned_counts[f'{alt_col}_prop'] = (binned_counts[alt_col] / binned_counts[alt_col].sum())
-        return binned_counts
+    def calc_shares(df_binned_raw, alt_col):
+        shares = df_binned_raw.value_counts().reset_index()
+        shares.columns = ['bins', alt_col]
+        shares[alt_col] = shares[alt_col] / shares[alt_col].sum()
+        return shares
 
     if col_type in ('category', 'number'):
-
-        binned_target_prop = prep_binning(binned_target, 'target')
-        binned_syn_prop = prep_binning(binned_syn, 'syn')
-
-        merged_bined = pd.merge(binned_target_prop, binned_syn_prop,how='left')
-        merged_bined['syn_prop'] = merged_bined['syn_prop'].fillna(0)
-        merged_bined['diff'] = abs(merged_bined['target_prop'] - merged_bined['syn_prop'])
-
-        return merged_bined['diff'].max()
+        shares = pd.merge(calc_shares(binned_target, 'target'),
+                          calc_shares(binned_syn, 'syn'),
+                          how='left')
+        shares['syn'] = shares['syn'].fillna(0)
+        return shares
 
     else:
         print("Unsupported type entered.")
 
 
-def _bi_etvd(binned_target_r: DataFrame,
-            binned_syn_r: DataFrame,
-            first_col: str,
-            second_col: str) -> float:
+def _bi_shares(binned_target_r: DataFrame,
+               binned_syn_r: DataFrame,
+               first_col: str,
+               second_col: str) -> float:
     """
-    Bivariate Empirical Total Variation Distance (BIETVD) is the max difference in proportions between the target col 1 col 2 and syn col 1 col 2 distribution
-
-    1. Bin Data according to column type
-    2. Cross Tab calculate frequency
-    3. Subtract target cab from syn cross tab
-    4. Max difference is BIETVD
-
-    :param binned_target_r: sliced binned target dataframe of two columns
-    :param binned_syn_r: sliced binned synthetic dataframe of two columns
-    :param first_col: str name of first col
-    :param second_col: str name of second col
-
+    Calculate relative frequencies of two already binned target and synthetic columns.
     """
     target_d = binned_target_r.copy()
     syn_d = binned_syn_r.copy()
@@ -341,6 +291,7 @@ def _bi_etvd(binned_target_r: DataFrame,
             syn_ct.loc[missing_index, :] = 0
 
     # make sure columns + index lines up
+    # FIXME
     return np.max(abs(target_ct - syn_ct.loc[target_ct.index,target_ct.columns]).values)
 
 
@@ -427,29 +378,19 @@ def _get_nn_model(train: DataFrame, cat_slice: int) -> Tuple[np.ndarray]:
     return nearest_neighbor_model
 
 
-def _calculate_dcr_nndr(target_data_privacy: DataFrame,
-                        syn_data_privacy: DataFrame,
+def _calculate_dcr_nndr(tgt_data: DataFrame,
+                        syn_data: DataFrame,
                         column_dictionary: dict,
                         smoothing_factor: int) -> Tuple[Dict, Dict]:
     """
     Function to calculate dcr and nndr. Since DCR and NNDR are related, both are calculated at the same time.
 
-    :param target_data_privacy: privacy prepared dataset target
-    :param syn_data_privacy: privacy prepared dataset synthetic
+    :param tgt_data: privacy prepared dataset target
+    :param syn_data: privacy prepared dataset synthetic
     :param column_dictionary: column to type mapping
     :param smoothing_factor: smoothing factor to avoid small division
 
     :returns: bins and histograms of dcr and nndr
-
-    """
-
-    """
-    .:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:.
-
-    Variables to Set
-
-    .:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:.
-
     """
 
     # how many columns to include
@@ -464,12 +405,7 @@ def _calculate_dcr_nndr(target_data_privacy: DataFrame,
     # how many bins should be created for privacy histograms
     privacy_number_of_bins = 20
 
-    # col names
-    dcr_col_name = 'distance_to_closest_record'
-    nndr_col_name = 'nearest_neighbor_distance_ratio'
-
     # derive model based on sample of features
-
     model_columns = list(column_dictionary.keys())
     sample_feature_amount = min(len(model_columns), max_features)
     feature_columns = np.random.choice(model_columns, sample_feature_amount)
@@ -480,35 +416,33 @@ def _calculate_dcr_nndr(target_data_privacy: DataFrame,
     # where do cat columns begin
     cat_slice = len(category_columns)
 
-    target_data_privacy = target_data_privacy[ordered_columns]
-    syn_data_privacy = syn_data_privacy[ordered_columns]
+    tgt_data = tgt_data[ordered_columns]
+    syn_data = syn_data[ordered_columns]
 
-    assert all(target_data_privacy.columns == target_data_privacy.columns), "Train and Syn have mismatched columns"
+    assert all(tgt_data.columns == tgt_data.columns), "Train and Syn have mismatched columns"
 
     # split into tgt_train, tgt_query, and syn_query
 
-    target_size = len(target_data_privacy)
-    synthetic_size = len(syn_data_privacy)
+    target_size = len(tgt_data)
+    synthetic_size = len(syn_data)
 
     sample_size = min(max_sample_size,
                       sample_ratio * target_size,
                       synthetic_size)
 
-    shuffled_target_train_index = list(target_data_privacy.index)
+    shuffled_target_train_index = list(tgt_data.index)
     np.random.shuffle(shuffled_target_train_index)
-#     print(shuffled_target_train_index)
-#     print(sample_size)
 
-    tgt_train, tgt_query = (target_data_privacy.loc[shuffled_target_train_index[:-int(sample_size)]],
-                            target_data_privacy.loc[shuffled_target_train_index[-int(sample_size):]])
+    tgt_train, tgt_query = (tgt_data.loc[shuffled_target_train_index[:-int(sample_size)]],
+                            tgt_data.loc[shuffled_target_train_index[-int(sample_size):]])
 
-    shuffled_target_syn_index = list(syn_data_privacy.index)
+    shuffled_target_syn_index = list(syn_data.index)
     np.random.shuffle(shuffled_target_syn_index)
 
     # can be omitted since syn_train is not needed
     # if sample_size = synthetic_size, syn_query is all syn dataset
-    _, syn_query = (syn_data_privacy.loc[shuffled_target_syn_index[:-int(sample_size)]],
-                    syn_data_privacy.loc[shuffled_target_syn_index[-int(sample_size):]])
+    _, syn_query = (syn_data.loc[shuffled_target_syn_index[:-int(sample_size)]],
+                    syn_data.loc[shuffled_target_syn_index[-int(sample_size):]])
 
     # training model
     nn_model = _get_nn_model(tgt_train, cat_slice)
@@ -518,7 +452,7 @@ def _calculate_dcr_nndr(target_data_privacy: DataFrame,
 
     # Calculating DCR NNDR
     query_dict = {
-        'target': tgt_query_neighbors,
+        'tgt': tgt_query_neighbors,
         'syn': syn_query_neightbors
     }
 
@@ -527,18 +461,18 @@ def _calculate_dcr_nndr(target_data_privacy: DataFrame,
     for label, query in query_dict.items():
         dcr = query[0][:, 0]
         nndr = query[0][:, 0] / np.maximum(query[0][:, 1], smoothing_factor)
-        df_privacy = pd.DataFrame({dcr_col_name: dcr,
-                                   nndr_col_name: nndr})
+        df_privacy = pd.DataFrame({'DCR': dcr,
+                                   'NNDR': nndr})
         privacy_data[label] = df_privacy
-    # get histograms and bins
 
+    # get histograms and bins
     bins = {}
     histograms = {}
 
-    for type_ in [dcr_col_name, nndr_col_name]:
+    for type_ in ['DCR', 'NNDR']:
         histograms[type_] = dict()
-        baseline_data = privacy_data['target'][type_].dropna()
-        histograms[type_]['target'], bins[type_] = np.histogram(
+        baseline_data = privacy_data['tgt'][type_].dropna()
+        histograms[type_]['tgt'], bins[type_] = np.histogram(
             baseline_data, bins=privacy_number_of_bins, density=True
         )
 
@@ -549,17 +483,16 @@ def _calculate_dcr_nndr(target_data_privacy: DataFrame,
 
     # norm results
     dcr_nndr_data_norm = {key: df.copy() for key, df in privacy_data.items()}
-    baseline_dcr = dcr_nndr_data_norm['target'][dcr_col_name]
+    baseline_dcr = dcr_nndr_data_norm['tgt']['DCR']
     bound = np.quantile(baseline_dcr[~np.isnan(baseline_dcr)], dcr_quantile)
     for key in dcr_nndr_data_norm:
-        dcr_nndr_data_norm[key][dcr_col_name] = np.where(
-            dcr_nndr_data_norm[key][dcr_col_name] <= bound,
-            dcr_nndr_data_norm[key][dcr_col_name] / bound,
+        dcr_nndr_data_norm[key]['DCR'] = np.where(
+            dcr_nndr_data_norm[key]['DCR'] <= bound,
+            dcr_nndr_data_norm[key]['DCR'] / bound,
             1,
         )
 
     # quantile test
-
     def _empirical_ci(
         sample_value: float, boot_values: List[float], alpha: float = 0.05
     ) -> Tuple[float, float]:
@@ -644,317 +577,179 @@ def _calculate_dcr_nndr(target_data_privacy: DataFrame,
         bootstrap_results = pd.DataFrame(
             index=quantiles,
             columns=[
-                'synthetic',
-                'target',
-                'target_ci_low',
-                'target_ci_high',
+                'syn',
+                'tgt',
+                'tgt_ci_low',
+                'tgt_ci_high',
                 'check',
             ],
         )
 
         for quantile in quantiles:
             bootstrap_results.loc[quantile,
-                                  ['target','target_ci_low','target_ci_high']
-            ] = _bootstrap_quantile(target,quantile,bootstrap_kwargs)
-            bootstrap_results.loc[quantile,'synthetic'] = np.quantile(synthetic, quantile)
+                                  ['tgt', 'tgt_ci_low', 'tgt_ci_high']
+            ] = _bootstrap_quantile(target, quantile, bootstrap_kwargs)
+            bootstrap_results.loc[quantile, 'syn'] = np.quantile(synthetic, quantile)
 
         bootstrap_results['check'] = (
-                bootstrap_results['synthetic'] >= bootstrap_results['target_ci_low']
+                bootstrap_results['syn'] >= bootstrap_results['tgt_ci_low']
                                       )
         final_check = np.all(bootstrap_results['check'])
         bootstrap_results_dict = bootstrap_results.to_dict("series")
 
         return {
-            'check':final_check,
-            'details':bootstrap_results_dict
+            'check': final_check,
+            'details': bootstrap_results_dict
         }
 
     privacy_tests = {}
     checks = {}
 
-    for privacy_type in [dcr_col_name,nndr_col_name]:
-        target = dcr_nndr_data_norm['target'][privacy_type]
-        synthetic = dcr_nndr_data_norm['syn'][privacy_type]
-        privacy_tests[privacy_type] = _quantile_test_function(target,synthetic)
-        checks[privacy_type] = privacy_tests[privacy_type]['check']
+    for privacy_type in ['DCR', 'NNDR']:
+        tgt_norm = dcr_nndr_data_norm['tgt'][privacy_type]
+        syn_norm = dcr_nndr_data_norm['syn'][privacy_type]
+        privacy_tests[privacy_type] = _quantile_test_function(tgt_norm, syn_norm)
+        checks[privacy_type] = 'PASSED' if privacy_tests[privacy_type]['check'] else 'FAILED'
 
-    return checks,privacy_tests
+    return checks, privacy_tests
 
+def _calculate_statistical_distances(tgt_data:DataFrame,
+                                     syn_data:DataFrame,
+                                     type: str, # univariate | bivariate
+                                     number_of_bins:int = 100):
 
-def _calculate_accuracy_metric(target_data:DataFrame,
-                              synthetic_data:DataFrame,
-                              metric_func_name:str,
-                              summary_func_name:str='mean',
-                              number_of_bins:int = 10)-> float:
-    """
-    Compute a single metric for a given target and synthetic data set
+    assert type in ['univariate', 'bivariate'], "type not recognized"
+    # check if data is in expected format
+    assert sorted(tgt_data.columns) == sorted(syn_data.columns), "Target and Synthetic have different columns"
+    column_dict = _generate_column_type_dictionary(tgt_data)
 
-    Please see metrics.py for a detail breakdown of each metric.
+    tgt_sample = _sample_one_event(tgt_data)
+    syn_sample = _sample_one_event(syn_data)
+    tgt_binned, syn_binned = _bin_looped(tgt_sample,
+                                         syn_sample,
+                                         column_dict,
+                                         number_of_bins)
 
-    :param target_data: target data
-    :param synthetic_data: synthetic data
-    :param metric_func_name: metric function to be tested
-    possible options
+    def calc_shares(df_binned, label):
+        shares = df_binned.value_counts().reset_index()
+        shares.columns = ['bins', label]
+        shares[label] = shares[label] / shares[label].sum()
+        return shares
 
-    accuracy:
-    uni_etvd
-    bi_etvd
-    correlation
+    result = list()
+    columns = column_dict.keys()
+    for col1 in columns:
+        for col2 in columns:
+            if (type=='univariate' and col1 == col2) or (type=='bivariate' and col1 < col2):
+                tgt_values = tgt_binned[col1].astype(str) + "|" + tgt_binned[col2].astype(str)
+                syn_values = syn_binned[col1].astype(str) + "|" + syn_binned[col2].astype(str)
+                shares = pd.merge(calc_shares(tgt_values, 'tgt'),
+                                  calc_shares(syn_values, 'syn'),
+                                  how='left')
+                shares['syn'] = shares['syn'].fillna(0)
+                diff = np.abs(shares['tgt'] - shares['syn'])
+                hell = np.sqrt(np.sum((np.sqrt(shares['tgt']) - np.sqrt(shares['syn'])) ** 2)) / np.sqrt(2)
+                out = pd.DataFrame({'col1': [col1],
+                                    'col2': [col2],
+                                    'type': type,
+                                    'tvd': np.max(diff),
+                                    'l1d': np.sum(diff),
+                                    'l2d': np.sqrt(np.sum(diff ** 2)),
+                                    'hellinger': hell})
+                result.append(out)
 
-    :param summary_func_name: function to aggregate values
-    possible options
-    median
-    mean
-    max
+    return pd.concat(result)
 
-    :param number_of_bins: number of bins for numeric data
-
-    :returns: averaged result calculated by summary_func
-
-    """
-    """
-    .:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:.
-
-    summary_func selection
-
-    .:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:.
-
-    """
-
-    dictionary_functions = {
-        'median': np.median,
-        'mean': np.mean,
-        'max': np.max
-
-    }
-
-    summary_func = dictionary_functions[summary_func_name]
-
-    """
-    .:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:.
-
-    Data Processing
-
-    .:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:.
-
-    """
+def _calculate_accuracy_correlations(tgt_data:DataFrame,
+                                     syn_data:DataFrame,
+                                     number_of_bins:int = 100):
 
     # check if data is in expected format
+    assert sorted(tgt_data.columns) == sorted(syn_data.columns), "Target and Synthetic have different columns"
+    tgt_dict = _generate_column_type_dictionary(tgt_data)
 
-    assert sorted(target_data.columns) == sorted(synthetic_data.columns), "Target and Synthetic have different columns"
+    tgt_sample = _sample_two_events(tgt_data)
+    syn_sample = _sample_two_events(syn_data)
+    column_dict = _generate_column_type_dictionary(tgt_sample)
 
-    original_column_type_dictionary = _generate_column_type_dictionary(target_data)
+    tgt_binned, syn_binned = _bin_looped(tgt_sample,
+                                         syn_sample,
+                                         column_dict,
+                                         number_of_bins)
 
+    tgt_correlations = _calculate_correlation(tgt_binned, list(column_dict.keys())).fillna(0)
+    syn_correlations = _calculate_correlation(syn_binned, list(column_dict.keys())).fillna(0)
+
+    correlation_differences = abs(
+        tgt_correlations - syn_correlations.loc[tgt_correlations.index, tgt_correlations.columns])
+
+    # dropping na values
+    flattend_correlation = correlation_differences.values.flatten()
+    non_null_flat_correlations = flattend_correlation[~np.isnan(flattend_correlation)]
+
+    # perfect score = 0, if correlations exactly match in target and synthetic
+    # representative of a max difference percentage
+    return non_null_flat_correlations
+
+
+def _calculate_privacy_tests(tgt_data: DataFrame,
+                             syn_data: DataFrame):
     """
-    .:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:.
-
-    Metric Calculation
-
-    .:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:.
-    """
-
-    if metric_func_name == 'uni_etvd':
-        '''
-        Data Prep
-        '''
-        sample_one_target = _sample_one_event(target_data)
-        sample_one_synthetic = _sample_one_event(synthetic_data)
-
-        one_t_binned, one_s_binned = _bin_looped(sample_one_target,
-                                                 sample_one_synthetic,
-                                                 original_column_type_dictionary,
-                                                 number_of_bins)
-
-        univariate_values = []
-        for col_name, col_type in original_column_type_dictionary.items():
-            univariate_values.append(_uni_etvd(one_t_binned[col_name],
-                                               one_s_binned[col_name],
-                                               col_type=col_type))
-
-        df_univariate = pd.DataFrame({'col_names': list(original_column_type_dictionary.keys()),
-                                      'uni_values': univariate_values})
-
-        summary = summary_func(univariate_values)
-
-    elif metric_func_name == 'bi_etvd':
-        '''
-        Data Prep
-        '''
-        sample_one_target = _sample_one_event(target_data)
-        sample_one_synthetic = _sample_one_event(synthetic_data)
-
-        one_t_binned, one_s_binned = _bin_looped(sample_one_target,
-                                                 sample_one_synthetic,
-                                                 original_column_type_dictionary,
-                                                 number_of_bins)
-        column_pairings = product(original_column_type_dictionary.keys(), original_column_type_dictionary.keys())
-        '''
-        Calculations
-        '''
-
-        bivariate_values = []
-        column_one_pair = []
-        column_two_pair = []
-        for column_pairing in column_pairings:
-            column_one = column_pairing[0]
-            column_two = column_pairing[1]
-
-            column_one_pair.append(column_one)
-            column_two_pair.append(column_two)
-            if column_one == column_two:
-                # skip if column is duplicated
-                bi_val = np.nan
-            else:
-                bi_val = _bi_etvd(one_t_binned[[column_one, column_two]],
-                                  one_s_binned[[column_one, column_two]],
-                                  column_one,
-                                  column_two)
-
-            bivariate_values.append(bi_val)
-
-        df_bivariate = pd.DataFrame({'col_one': column_one_pair,
-                                     'col_two': column_two_pair,
-                                     'bi_vals': bivariate_values}).dropna()
-        summary = summary_func(df_bivariate['bi_vals'])
-
-    elif metric_func_name == 'correlation':
-        '''
-        Data Prep
-        '''
-        sample_two_target = _sample_two_events(target_data)
-        sample_two_synthetic = _sample_two_events(synthetic_data)
-        new_column_type_dictionary = _generate_column_type_dictionary(sample_two_target)
-
-        two_t_binned, two_s_binned = _bin_looped(sample_two_target,
-                                                 sample_two_synthetic,
-                                                 new_column_type_dictionary,
-                                                 number_of_bins)
-        '''
-        Calculations
-        '''
-
-        target_correlations = _calculate_correlation(two_t_binned, list(new_column_type_dictionary.keys())).fillna(0)
-        syn_correlations = _calculate_correlation(two_s_binned, list(new_column_type_dictionary.keys())).fillna(0)
-
-        correlation_differences = abs(
-            target_correlations - syn_correlations.loc[target_correlations.index, target_correlations.columns])
-
-        # dropping na values
-
-        flattend_correlation = correlation_differences.values.flatten()
-        non_null_flat_correlations = flattend_correlation[~np.isnan(flattend_correlation)]
-
-        # perfect score = 0, if correlations exactly match in target and synthetic
-        # representative of a max difference percentage
-        summary = summary_func(non_null_flat_correlations)
-    else:
-        raise Exception("Metric function not defined")
-
-    return summary
-
-
-def _calculate_privacy_metric(target_data:DataFrame,
-                              synthetic_data:DataFrame,
-                              metric_func_name:str)-> float:
-    """
-    Compute a single metric for a given target and synthetic data set
-
-    Please see metrics.py for a detail breakdown of each metric.
-
-    :param target_data: target data
-    :param synthetic_data: synthetic data
-    :param metric_func_name: metric function to be tested
-    possible options
-
-    privacy:
-    privacy_dcr_nndr - hardcoded measure
-
-    :param summary_func: function to aggregate values (ex np.average)
-    :param number_of_bins: number of bins for numeric data
-
-    :returns: bool value if test is passed
-
-    """
-    """
-    .:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:.
-
-    Data Processing
-
-    .:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:.
-
+    Compute privacy tests for a given target and synthetic data set
     """
 
-    assert sorted(target_data.columns) == sorted(synthetic_data.columns), "Target and Synthetic have different columns"
+    assert sorted(tgt_data.columns) == sorted(syn_data.columns), "Target and Synthetic have different columns"
 
-    original_column_type_dictionary = _generate_column_type_dictionary(target_data)
-    synthetic_column_type_dictionary = _generate_column_type_dictionary(synthetic_data)
+    tgt_dict = _generate_column_type_dictionary(tgt_data)
+    syn_dict = _generate_column_type_dictionary(syn_data)
+    assert tgt_dict == syn_dict, "Target and Synthetic have different types"
 
-    assert original_column_type_dictionary == synthetic_column_type_dictionary, "Target and Synthetic have different types"
-
-    flat_table_target = _flatten_table(target_data.reset_index(), original_column_type_dictionary)
-    flat_table_syn = _flatten_table(synthetic_data.reset_index(), original_column_type_dictionary)
+    flat_table_target = _flatten_table(tgt_data.reset_index(), tgt_dict)
+    flat_table_syn = _flatten_table(syn_data.reset_index(), tgt_dict)
 
     # columns now include 1st and 2nd record
-    new_column_type_dictionary = _generate_column_type_dictionary(flat_table_target)
+    column_dict = _generate_column_type_dictionary(flat_table_target)
 
-
-    """
-    .:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:.
-
-    Metric Calculation
-
-    .:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:._.:*~*:.
-    """
-
-    if metric_func_name == 'privacy_dcr_nndr':
-        smoothing_factor = 1e-8
-        target_data_p, syn_data_p = _prepare_data_for_privacy_metrics(flat_table_target, flat_table_syn,
-                                                                      new_column_type_dictionary, smoothing_factor)
-        checks,privacy_tests = _calculate_dcr_nndr(target_data_p, syn_data_p, new_column_type_dictionary, smoothing_factor)
-
-
-        # two values returned, 1 means both tests passes, 0.5 means failed one test
-        #average = sum(checks.values())
-    else:
-        raise Exception("Metric function not defined")
-
+    smoothing_factor = 1e-8
+    tgt_data_p, syn_data_p = _prepare_data_for_privacy_metrics(flat_table_target, flat_table_syn,
+                                                               column_dict, smoothing_factor)
+    checks, privacy_tests = _calculate_dcr_nndr(tgt_data_p, syn_data_p, column_dict, smoothing_factor)
     return checks
 
 
-# opinated truth
-def compare(target_data:DataFrame,
-            synthetic_data:DataFrame,
-            metrics_to_return:List = ['accuracy-frequency','privacy']
+def compare(tgt_data:DataFrame,
+            syn_data:DataFrame,
+            metrics_to_return:List = ['statistical-distances', 'privacy-tests']
             ) -> Dict:
     """
-
     Compare a target and synthetic dataset and returns metrics
 
-    :param target_data: target data
-    :param synthetic_data: synthetic data
+    :param tgt_data: target data
+    :param syn_data: synthetic data
     :param metrics_to_return: list of metric types to return, if empty compute all
-    ['accuracy-frequency','privacy']
-
-    :returns: univariate_total_variation_distance,bivariate_total_variation_distance,correlation_difference,distance_to_closest_record,nearest_neighbor_distance_ratio
+    ['statistical-distances','privacy-tests']
 
     """
-    check_common_data_format(target_data)
-    check_common_data_format(synthetic_data)
+    check_common_data_format(tgt_data)
+    check_common_data_format(syn_data)
     metrics_dict = {}
 
-    if 'accuracy-frequency' in metrics_to_return:
-        metrics_dict['univariate_total_variation_distance'] = _calculate_accuracy_metric(target_data, synthetic_data, 'uni_etvd')
-        metrics_dict['bivariate_total_variation_distance'] = _calculate_accuracy_metric(target_data, synthetic_data, 'bi_etvd')
-        metrics_dict['correlation_difference'] = _calculate_accuracy_metric(target_data, synthetic_data, 'correlation')
-        #
-    # percent_difference = np.mean(np.nan_to_num([uni, bi, correlation]))
-    #
-    # accuracy_opinion = 100 - percent_difference
+    if 'statistical-distances' in metrics_to_return:
+        univariate = _calculate_statistical_distances(tgt_data, syn_data, 'univariate')
+        bivariate = _calculate_statistical_distances(tgt_data, syn_data, 'bivariate')
+        correlations = _calculate_accuracy_correlations(tgt_data, syn_data)
+        def agg(x): return np.round(np.mean(x), 5)
+        metrics_dict['TVD 1dim'] = agg(univariate['tvd'])
+        metrics_dict['L1D 1dim'] = agg(univariate['l1d'])
+        metrics_dict['Hellinger 1dim'] = agg(univariate['hellinger'])
+        metrics_dict['TVD 2dim'] = agg(bivariate['tvd'])
+        metrics_dict['L1D 2dim'] = agg(bivariate['l1d'])
+        metrics_dict['Hellinger 2dim'] = agg(bivariate['hellinger'])
+        metrics_dict['AutoCorr Diff'] = agg(correlations)
 
-    if 'privacy' in metrics_to_return:
-        checks = _calculate_privacy_metric(target_data, synthetic_data, 'privacy_dcr_nndr')
-        metrics_dict['distance_to_closest_record'] = checks['distance_to_closest_record']
-        metrics_dict['nearest_neighbor_distance_ratio'] = checks['nearest_neighbor_distance_ratio']
-
+    if 'privacy-tests' in metrics_to_return:
+        checks = _calculate_privacy_tests(tgt_data, syn_data)
+        metrics_dict['DCR'] = checks['DCR']
+        metrics_dict['NNDR'] = checks['NNDR']
 
     return metrics_dict

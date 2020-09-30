@@ -93,15 +93,16 @@ The helper method `target_data_manipulation.prepare_common_data_format` can read
 
 ### Accuracy
 
-#### Empirical Distribution Metrics
+#### Statistical Distance of Empirical Distributions
 
-These metrics quantify the difference between the empirical distributions of the target compared to the synthetic data. Numeric variables are being discretized by binning these into 10 equally-spaced buckets. Categorical variables are considering the top 20 values, and lump together all remaining values into a single bucket.
+These metrics quantify the difference between the empirical distributions of the target compared to the synthetic data. Numeric variables are being discretized by binning these into 100 equally-spaced buckets. Categorical variables are considering the top 100 values, and lump together all remaining values into a single bucket.
 
-The lower the scores, the smaller the distance, thus the more representative the synthetic data is with respect to its target data.
+For each column (=univariate/1dim), resp each combination of columns (=bivariate/2dim) a number of metrics is being calculated, and then being averaged across all combinations:
+* [Total Variation Distance](https://en.wikipedia.org/wiki/Total_variation_distance_of_probability_measures) (TVD) = maximum deviation in relative frequency
+* L1-Distance (L1D) of empirical distributions = sum over all deviations in relative frequency
+* [Hellinger Distance](https://en.wikipedia.org/wiki/Hellinger_distance) 
 
-* Univariate Total Variation Distance: measures frequencies with respect to one variable
-* Bivariate Total Variation Distance: measures frequencies with respect to two variables
-* Correlation Difference: auto-correlation of a variable
+In addition the average absolute difference in auto-correlations across all columns is being reported.  
 
 ### Privacy
 
