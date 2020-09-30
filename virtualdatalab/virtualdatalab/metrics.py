@@ -29,30 +29,6 @@ from virtualdatalab.target_data_manipulation import _generate_column_type_dictio
 from virtualdatalab.cython.cython_metric import mixed_distance
 
 
-def _sample_one_event(data: DataFrame) -> DataFrame:
-    """
-    Randomly sample one record for each id.
-    """    # determine sequence length for each id
-    seq_lens = data.reset_index().groupby('id').size()    # randomly draw a sequence_pos for each id
-    draws = pd.DataFrame({'sequence_pos': np.floor(np.random.rand(len(seq_lens)) * seq_lens).astype(int)}).reset_index()    # inner join with provided dataframe to filter to drawn records
-    out = pd.merge(draws, data, on=['id', 'sequence_pos']).drop(columns='sequence_pos').set_index('id')
-    return out
-
-
-def _sample_two_events(data: DataFrame) -> DataFrame:
-    """
-    Randomly sample two consecutive records for each id, and flatten into one row per id.
-    """    # determine sequence length for each id
-    seq_lens = data.reset_index().groupby('id').size()    # filter to those ids that have at least two records
-    seq_lens = seq_lens[seq_lens>=2]    # randomly draw a sequence_pos (excl last item) for each id
-    draws1 = pd.DataFrame({'sequence_pos': np.floor(np.random.rand(len(seq_lens)) * (seq_lens-1)).astype(int)})
-    draws2 = draws1 + 1    # inner join with provided dataframe to filter to drawn records
-    item1 = pd.merge(draws1.reset_index(), data, on=['id', 'sequence_pos']).drop(columns='sequence_pos')
-    item2 = pd.merge(draws2.reset_index(), data, on=['id', 'sequence_pos']).drop(columns='sequence_pos')
-    out = pd.merge(item1, item2, on='id', suffixes=['_0', '_1']).set_index('id')
-    return out
-
-
 def _bin_data(target_col,
               syn_col,
               col_type: str,
@@ -459,9 +435,53 @@ def _calculate_dcr_nndr(tgt_data: DataFrame,
 
     return checks, privacy_tests
 
+def _calculate_coherence(tgt_data:DataFrame,
+                         syn_data:DataFrame,
+                         type: str, # users_per_category | categories_per_user
+                         number_of_bins:int = 10):
+
+    assert type in ['users_per_category', 'categories_per_user'], "type not recognized"
+    # check if data is in expected format
+    assert sorted(tgt_data.columns) == sorted(syn_data.columns), "Target and Synthetic have different columns"
+    column_dict = _generate_column_type_dictionary(tgt_data)
+
+    tgt_binned, syn_binned = _bin_looped(tgt_data, syn_data, column_dict, number_of_bins)
+    tgt_binned = tgt_binned.astype(str).reset_index()
+    syn_binned = syn_binned.astype(str).reset_index()
+
+    result = list()
+    for col in list(column_dict):
+        if type == 'users_per_category':
+            tgt_shares = tgt_binned.groupby(by=col, as_index=False).agg({'id': pd.Series.nunique})
+            tgt_shares['id'] = tgt_shares['id'] / tgt_binned['id'].nunique()
+            syn_shares = syn_binned.groupby(by=col, as_index=False).agg({'id': pd.Series.nunique})
+            syn_shares['id'] = syn_shares['id'] / syn_binned['id'].nunique()
+        elif type == 'categories_per_user':
+            tgt_shares = tgt_binned.groupby(by='id').agg({col: pd.Series.nunique})
+            tgt_shares = tgt_shares[col].value_counts(normalize=True).to_frame().reset_index()
+            syn_shares = syn_binned.groupby(by='id').agg({col: pd.Series.nunique})
+            syn_shares = syn_shares[col].value_counts(normalize=True).to_frame().reset_index()
+        tgt_shares.columns = ['value', 'tgt']
+        syn_shares.columns = ['value', 'syn']
+        shares = pd.merge(tgt_shares, syn_shares, on='value', how='left')
+        shares['syn'] = shares['syn'].fillna(0)
+        diff = np.abs(shares['tgt'] - shares['syn'])
+        out = pd.DataFrame({'label': [col],
+                            'type': type,
+                            'tvd': np.max(diff),
+                            'l1d': np.sum(diff),
+                            'l2d': np.sqrt(np.sum(diff ** 2))})
+
+        result.append(out)
+
+    return pd.concat(result)
+
+
+
+
 def _calculate_statistical_distances(tgt_data:DataFrame,
                                      syn_data:DataFrame,
-                                     type: str, # 1dim | 2dmin | 3dmin | 4dmin
+                                     type: str, # 1dim | 2dim | 3dim | 4dim
                                      number_of_bins:int = 10,
                                      max_combinations:int = 100):
 
@@ -469,6 +489,19 @@ def _calculate_statistical_distances(tgt_data:DataFrame,
     # check if data is in expected format
     assert sorted(tgt_data.columns) == sorted(syn_data.columns), "Target and Synthetic have different columns"
     column_dict = _generate_column_type_dictionary(tgt_data)
+
+    def _sample_one_event(data: DataFrame) -> DataFrame:
+        """
+        Randomly sample one record for each id.
+        """
+        # determine sequence length for each id
+        seq_lens = data.reset_index().groupby('id').size()
+        # randomly draw a sequence_pos for each id
+        draws = pd.DataFrame({'sequence_pos': np.floor(np.random.rand(len(seq_lens)) * seq_lens).astype(
+            int)}).reset_index()
+        # inner join with provided dataframe to filter to drawn records
+        out = pd.merge(draws, data, on=['id', 'sequence_pos']).drop(columns='sequence_pos').set_index('id')
+        return out
 
     tgt_sample = _sample_one_event(tgt_data)
     syn_sample = _sample_one_event(syn_data)
@@ -594,17 +627,20 @@ def compare(tgt_data:DataFrame,
         stat_2dim = _calculate_statistical_distances(tgt_data, syn_data, '2dim')
         stat_3dim = _calculate_statistical_distances(tgt_data, syn_data, '3dim')
         stat_4dim = _calculate_statistical_distances(tgt_data, syn_data, '4dim')
+        stat_upc = _calculate_coherence(tgt_data, syn_data, 'users_per_category')
+        stat_cpu = _calculate_coherence(tgt_data, syn_data, 'categories_per_user')
         def agg(x): return np.round(np.mean(x), 5)
-        metrics_dict['Hellinger 1dim'] = agg(stat_1dim['hellinger'])
-        metrics_dict['TVD 1dim'] = agg(stat_1dim['tvd'])
-        metrics_dict['L1D 1dim'] = agg(stat_1dim['l1d'])
-        metrics_dict['L1D 2dim'] = agg(stat_2dim['l1d'])
-        metrics_dict['L1D 3dim'] = agg(stat_3dim['l1d'])
-        metrics_dict['L1D 4dim'] = agg(stat_4dim['l1d'])
+        metrics_dict['TVD univariate'] = agg(stat_1dim['tvd'])
+        metrics_dict['L1D univariate'] = agg(stat_1dim['l1d'])
+        metrics_dict['L1D bivariate'] = agg(stat_2dim['l1d'])
+        metrics_dict['L1D 3-way'] = agg(stat_3dim['l1d'])
+        metrics_dict['L1D 4-way'] = agg(stat_4dim['l1d'])
+        metrics_dict['L1D Users per Category'] = agg(stat_upc['l1d'])
+        metrics_dict['L1D Categories per User'] = agg(stat_cpu['l1d'])
 
     if 'privacy-tests' in metrics_to_return:
         checks = _calculate_privacy_tests(tgt_data, syn_data)
-        metrics_dict['DCR'] = checks['DCR']
-        metrics_dict['NNDR'] = checks['NNDR']
+        metrics_dict['DCR test'] = checks['DCR']
+        metrics_dict['NNDR test'] = checks['NNDR']
 
     return metrics_dict
