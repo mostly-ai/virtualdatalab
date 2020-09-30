@@ -95,7 +95,7 @@ The helper method `target_data_manipulation.prepare_common_data_format` can read
 
 #### Statistical Distance of Empirical Distributions
 
-These metrics quantify the difference between the empirical distributions of the target compared to the synthetic data. Numeric variables are being discretized by binning these into 10 equally-spaced buckets. Categorical variables are considering the top 100 values, and lump together all remaining values into a single bucket.
+These metrics quantify the difference between the empirical distributions of the target compared to the synthetic data. Numeric variables are being discretized by binning these into 10 equally-spaced buckets. Categorical variables are considering the top 10 values, and lump together all remaining values into a single bucket.
 
 For each column (=univariate/1dim), resp each combination of columns (=bivariate/2dim) a number of metrics is being calculated, and then being averaged across all combinations:
 * [Total Variation Distance](https://en.wikipedia.org/wiki/Total_variation_distance_of_probability_measures) (TVD) = maximum deviation in relative frequency
