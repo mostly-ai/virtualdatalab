@@ -27,19 +27,13 @@ def benchmark(syntheizers_classes:List[Type],
     """
     One function to rule them all.
 
-
     Train , generate and analyze specific datasets for a given set of synthesizer classes.
-
-    Synthetic dataset
-
-    Custom datasets must be passed through encoded_datasets, otherwise CDNOW dataset is used
 
     :param syntheizers_classes: list of instance of synthesizer classes
     :param datasets: dict keys: dataset name dict values : pandas dataframe in common data format
     :param verbose: verbose benchmarking
 
-    :returns: table of results or averaged
-
+    :returns: table of results
     """
     if len(datasets) == 0:
         # put both
@@ -121,5 +115,6 @@ def benchmark(syntheizers_classes:List[Type],
 
 
     df_results_all = pd.concat(results_list)
+    df_results_all = df_results_all.sort_values('dataset_name').set_index('dataset_name')
 
     return df_results_all
