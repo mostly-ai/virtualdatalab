@@ -28,22 +28,6 @@ from virtualdatalab.target_data_manipulation import _generate_column_type_dictio
 
 from virtualdatalab.cython.cython_metric import mixed_distance
 
-"""
-<*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*>
-<*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*>
-
-Data Preprocessing Functions
-
-[x] _generate_column_type_dictionary
-[x] _sample_data
-[x] _flatten_table
-[x] _bin_data
-[x] _prepare_data_for_privacy_metrics
-
-<*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*>
-<*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*>
-
-"""
 
 def _sample_one_event(data: DataFrame) -> DataFrame:
     """
@@ -53,6 +37,7 @@ def _sample_one_event(data: DataFrame) -> DataFrame:
     draws = pd.DataFrame({'sequence_pos': np.floor(np.random.rand(len(seq_lens)) * seq_lens).astype(int)}).reset_index()    # inner join with provided dataframe to filter to drawn records
     out = pd.merge(draws, data, on=['id', 'sequence_pos']).drop(columns='sequence_pos').set_index('id')
     return out
+
 
 def _sample_two_events(data: DataFrame) -> DataFrame:
     """
@@ -66,6 +51,7 @@ def _sample_two_events(data: DataFrame) -> DataFrame:
     item2 = pd.merge(draws2.reset_index(), data, on=['id', 'sequence_pos']).drop(columns='sequence_pos')
     out = pd.merge(item1, item2, on='id', suffixes=['_0', '_1']).set_index('id')
     return out
+
 
 def _bin_data(target_col,
               syn_col,
@@ -105,6 +91,7 @@ def _bin_data(target_col,
         raise Exception("Col type not recognized")
     return binned_target, binned_syn
 
+
 def _bin_looped(target, synthetic, column_dictionary, number_of_bins):
     t = pd.DataFrame()
     s = pd.DataFrame()
@@ -113,6 +100,7 @@ def _bin_looped(target, synthetic, column_dictionary, number_of_bins):
         t[col] = binned_target
         s[col] = binned_syn
     return t, s
+
 
 def _flatten_table(data: DataFrame, column_type_dictionary: dict) -> DataFrame:
     """
@@ -215,148 +203,6 @@ def _prepare_data_for_privacy_metrics(tgt_data: DataFrame,
 
     return tgt_data_p,syn_data_p
 
-
-"""
-<*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*>
-<*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*>
-
-Metric Calculation Functions
-
-<*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*>
-<*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*><*>
-
-"""
-
-
-def _uni_shares(binned_target: Series,
-                binned_syn: Series,
-                col_type: str):
-    '''
-    Calculate relative frequencies of an already binned target and synthetic column.
-
-    :param binned_target: binned col from target data
-    :param binned_syn: binned col from syn data
-    :param col_type: numeric or categorical
-
-    return DataFrame with target and synthetic relative frequencies
-    '''
-    def calc_shares(df_binned_raw, alt_col):
-        shares = df_binned_raw.value_counts().reset_index()
-        shares.columns = ['bins', alt_col]
-        shares[alt_col] = shares[alt_col] / shares[alt_col].sum()
-        return shares
-
-    if col_type in ('category', 'number'):
-        shares = pd.merge(calc_shares(binned_target, 'target'),
-                          calc_shares(binned_syn, 'syn'),
-                          how='left')
-        shares['syn'] = shares['syn'].fillna(0)
-        return shares
-
-    else:
-        print("Unsupported type entered.")
-
-
-def _bi_shares(binned_target_r: DataFrame,
-               binned_syn_r: DataFrame,
-               first_col: str,
-               second_col: str) -> float:
-    """
-    Calculate relative frequencies of two already binned target and synthetic columns.
-    """
-    target_d = binned_target_r.copy()
-    syn_d = binned_syn_r.copy()
-
-    target_ct = pd.crosstab(target_d[first_col], target_d[second_col]) / len(target_d)
-    syn_ct = pd.crosstab(syn_d[first_col], syn_d[second_col])/ len(syn_d)
-
-    # extra work if synthetic does not have classes that is in target
-    # any extra classes synthetic may have are dropped out in _bin_data
-
-    missing_columns = [x for x in target_ct.columns if x not in syn_ct.columns]
-    missing_indexes = [x for x in target_ct.index if x not in syn_ct.index]
-    if missing_columns:
-        for missing_column in missing_columns:
-            # add missing column to category list if not existing
-            if missing_column not in syn_ct.columns.categories:
-                syn_ct.columns = syn_ct.columns.add_categories(missing_column)
-             # add empty val
-            syn_ct.loc[:, missing_column] = 0
-    if missing_indexes:
-        for missing_index in missing_indexes:
-            # add missing column to category list if not existing
-            if missing_index not in syn_ct.index.categories:
-                syn_ct.index = syn_ct.index.add_categories(missing_index)
-            # add empty val
-            syn_ct.loc[missing_index, :] = 0
-
-    # make sure columns + index lines up
-    # FIXME
-    return np.max(abs(target_ct - syn_ct.loc[target_ct.index,target_ct.columns]).values)
-
-
-def _calculate_chisq_log(
-        data: DataFrame,
-        columns: List[str]) -> float:
-    """
-    Calculate logarithmic chi square
-
-    :param data: matrix for which calculate chi square between columns
-    :param columns: column names
-    :return: log chi square or -1 if density is NaN
-    """
-
-    number_unique_rows, number_unique_cols = data[columns].nunique().values
-
-    df = (number_unique_rows - 1) * (number_unique_cols - 1)
-
-    confusion_matrix = (
-        data.groupby(list(columns))
-            .count()
-            .unstack(fill_value=0)
-            .fillna(0)
-    )
-    try:
-        chi2 = ss.chi2_contingency(confusion_matrix)[0]
-        log_p = ss.chi2.logpdf(x=chi2, df=df)
-    # can't compute for small frequencies 
-    except:
-        log_p = np.nan
-        
-    if np.isnan(log_p):
-        log_p = -1
-
-    return log_p
-
-
-def _calculate_correlation(group_data, columns):
-    chisq_matrix = pd.DataFrame(index=columns, columns=columns)
-    # use only upper part of the matrix
-    upper = np.triu_indices(chisq_matrix.values.shape[0], 0)
-
-    # calculate log chi square
-    for i, j in zip(upper[0], upper[1]):
-        row = columns[i]
-        col = columns[j]
-        chisq_matrix[col][row] = _calculate_chisq_log(group_data, [row, col])
-
-        if i != j:
-            chisq_matrix[row][col] = chisq_matrix[col][row]
-
-    log_chisq_correlations = np.maximum(0, np.log(-chisq_matrix.astype(float)))
-
-    maxima = pd.DataFrame(
-        np.minimum.outer(
-            log_chisq_correlations.max().to_list(),
-            log_chisq_correlations.max().to_list(),
-        ),
-        columns=columns,
-        index=columns,
-    )
-
-    normalized_correlations = np.square(log_chisq_correlations.divide(maxima))
-
-    return normalized_correlations
 
 def _get_nn_model(train: DataFrame, cat_slice: int) -> Tuple[np.ndarray]:
     """
@@ -616,7 +462,7 @@ def _calculate_dcr_nndr(tgt_data: DataFrame,
 def _calculate_statistical_distances(tgt_data:DataFrame,
                                      syn_data:DataFrame,
                                      type: str, # univariate | bivariate
-                                     number_of_bins:int = 100):
+                                     number_of_bins:int = 10):
 
     assert type in ['univariate', 'bivariate'], "type not recognized"
     # check if data is in expected format
@@ -659,37 +505,6 @@ def _calculate_statistical_distances(tgt_data:DataFrame,
                 result.append(out)
 
     return pd.concat(result)
-
-def _calculate_accuracy_correlations(tgt_data:DataFrame,
-                                     syn_data:DataFrame,
-                                     number_of_bins:int = 100):
-
-    # check if data is in expected format
-    assert sorted(tgt_data.columns) == sorted(syn_data.columns), "Target and Synthetic have different columns"
-    tgt_dict = _generate_column_type_dictionary(tgt_data)
-
-    tgt_sample = _sample_two_events(tgt_data)
-    syn_sample = _sample_two_events(syn_data)
-    column_dict = _generate_column_type_dictionary(tgt_sample)
-
-    tgt_binned, syn_binned = _bin_looped(tgt_sample,
-                                         syn_sample,
-                                         column_dict,
-                                         number_of_bins)
-
-    tgt_correlations = _calculate_correlation(tgt_binned, list(column_dict.keys())).fillna(0)
-    syn_correlations = _calculate_correlation(syn_binned, list(column_dict.keys())).fillna(0)
-
-    correlation_differences = abs(
-        tgt_correlations - syn_correlations.loc[tgt_correlations.index, tgt_correlations.columns])
-
-    # dropping na values
-    flattend_correlation = correlation_differences.values.flatten()
-    non_null_flat_correlations = flattend_correlation[~np.isnan(flattend_correlation)]
-
-    # perfect score = 0, if correlations exactly match in target and synthetic
-    # representative of a max difference percentage
-    return non_null_flat_correlations
 
 
 def _calculate_privacy_tests(tgt_data: DataFrame,
@@ -737,7 +552,6 @@ def compare(tgt_data:DataFrame,
     if 'statistical-distances' in metrics_to_return:
         univariate = _calculate_statistical_distances(tgt_data, syn_data, 'univariate')
         bivariate = _calculate_statistical_distances(tgt_data, syn_data, 'bivariate')
-        correlations = _calculate_accuracy_correlations(tgt_data, syn_data)
         def agg(x): return np.round(np.mean(x), 5)
         metrics_dict['TVD 1dim'] = agg(univariate['tvd'])
         metrics_dict['L1D 1dim'] = agg(univariate['l1d'])
@@ -745,7 +559,6 @@ def compare(tgt_data:DataFrame,
         metrics_dict['TVD 2dim'] = agg(bivariate['tvd'])
         metrics_dict['L1D 2dim'] = agg(bivariate['l1d'])
         metrics_dict['Hellinger 2dim'] = agg(bivariate['hellinger'])
-        metrics_dict['AutoCorr Diff'] = agg(correlations)
 
     if 'privacy-tests' in metrics_to_return:
         checks = _calculate_privacy_tests(tgt_data, syn_data)
