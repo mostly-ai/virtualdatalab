@@ -2,7 +2,7 @@
 
 The Virtual Data Lab is a python-based framework to assess generative models for sequential data with respect to their *accuracy* as well as *privacy* given a range of real-world and machine-generated datasets. In addition, it contains basic synthesizers capable of sequential data generation. The DL-based generative models, developed by [MOSTLY AI](https://mostly.ai/) as part of their commercial offering, are not part of this package.
 
-* License: [GPLv3](https://github.com/mostly-ai/virtualdatalab/blob/master/LICENSE)
+* License: [GPLv3](LICENSE)
 * Development Status: Alpha
 
 It is comparable to the [SDGym](https://github.com/sdv-dev/SDGym) by MIT, but differs in terms of its sole focus on sequential data, and its inclusion of privacy metrics.
@@ -89,7 +89,7 @@ The helper method `target_data_manipulation.prepare_common_data_format` can read
 
 `benchmark` takes a simple combination of the metrics below to output one indicator per type.
 
-![Screenshot](readme_imgs/benchmark.png)
+![Screenshot](docs/images/benchmark.png)
 
 ### Accuracy
 
@@ -111,27 +111,27 @@ In addition, we calculate two coherence measures for each attribute over the seq
 
 These metrics quantify the distance between individual synthetic data records to their closest target records. These distances are then related to the same distance measures applied to actual holdout data.
 
-![Screenshot](readme_imgs/privacy_split.png)
+![Screenshot](docs/images/privacy_split.png)
 
 * Distance to Closest Records (DCR): Calculates the distance of each synthetic record to a record in the target distribution. These distances must not be systematically smaller than the distances between holdout and target.
 
 * Nearest Neighbour Distance Ratio (NNDR): Ratio of the distance of each synthetic record to its closest to the second closest record in the target distribution. Again, these ratios should not be systematically smaller than the ratios derived for the holdout set. 
 
-![Screenshot](readme_imgs/nndr.png)
+![Screenshot](docs/images/nndr.png)
 
     
 ## Quick Start
 
 Collection of notebooks with examples.
 
-* [identity_synthesizer_dummy.ipynb](useful_notebooks/identity_synthesizer_dummy.ipynb) 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/mostly-ai/virtualdatalab/blob/master/useful_notebooks/identity_synthesizer_dummy.ipynb) 
+* [identity_synthesizer_dummy.ipynb](docs/notebooks/identity_synthesizer_dummy.ipynb) 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/mostly-ai/virtualdatalab/blob/master/docs/notebooks/identity_synthesizer_dummy.ipynb) 
     * IdentitySynthesizer demo with Dummy Data  
-*  [flatautoencoder_cdnow.ipynb](useful_notebooks/flatautoencoder_cdnow.ipynb) 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/mostly-ai/virtualdatalab/blob/master/useful_notebooks/flatautoencoder_cdnow.ipynb)
+*  [flatautoencoder_cdnow.ipynb](docs/notebooks/flatautoencoder_cdnow.ipynb) 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/mostly-ai/virtualdatalab/blob/master/docs/notebooks/flatautoencoder_cdnow.ipynb)
     * FlatAutoEncoder demo with CDNOW - accuracy
-*  [benchmark_example.ipynb](useful_notebooks/benchmark_example.ipynb) 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/mostly-ai/virtualdatalab/blob/master/useful_notebooks/benchmark_example.ipynb)
+*  [benchmark_example.ipynb](docs/notebooks/benchmark_example.ipynb) 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/mostly-ai/virtualdatalab/blob/master/docs/notebooks/benchmark_example.ipynb)
     * Benchmark default settings: CDNOW + BERKA + MLB, IdentitySynthesizer + ShuffleSynthesizer + FlatAutoEncoder
 
 ### Google Colab
