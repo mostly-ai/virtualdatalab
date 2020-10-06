@@ -16,7 +16,7 @@ It is recommended to install `virtualdatalab` in a Conda virtual environment to 
 conda create --name vdl
 conda activate vdl
 conda install pip
-cd virtualdatalab/virtualdatalab
+cd virtualdatalab
 pip install -r requirements.txt
 pip install . 
 ```
