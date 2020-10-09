@@ -17,6 +17,7 @@ Privacy Metrics:
 '''
 import pandas as pd
 import numpy as np
+import random
 from itertools import product
 from pandas import DataFrame,Series
 from typing import List,Tuple,Dict, Callable
@@ -494,6 +495,8 @@ def _calculate_statistical_distances(tgt_data:DataFrame,
         """
         Randomly sample one record for each id.
         """
+        # set seed to ensure same rows are considered across synthesizers
+        random.seed(a=123)
         # determine sequence length for each id
         seq_lens = data.reset_index().groupby('id').size()
         # randomly draw a sequence_pos for each id
@@ -542,6 +545,8 @@ def _calculate_statistical_distances(tgt_data:DataFrame,
         cols_4 = pd.DataFrame({'col_4': tgt_data.columns.to_list(), 'key': 'xyz'})
         cross = pd.merge(pd.merge(pd.merge(cols_1, cols_2, on='key'), cols_3, on='key'), cols_4, on='key').drop('key', axis=1)
 
+    # set seed to ensure same variable combinations are considered across synthesizers
+    random.seed(a=123)
     cross = cross.sample(min(cross.shape[0], max_combinations))
     tgt_binned['all'] = 'all'
     syn_binned['all'] = 'all'
@@ -575,6 +580,9 @@ def _calculate_statistical_distances(tgt_data:DataFrame,
                             'hellinger': hell})
 
         result.append(out)
+
+    # reset seed
+    random.seed(a=None)
 
     return pd.concat(result)
 
