@@ -13,11 +13,13 @@ It is recommended to install `virtualdatalab` in a Conda virtual environment to 
 
 ```bash
 # create conda env named `vdl`
-conda create --name vdl
+conda create -y -n vdl python==3.7.7
 conda activate vdl
 conda install pip
 cd virtualdatalab
 pip install -r requirements.txt
+# for cython extension
+python setup.py build_ext --inplace 
 pip install . 
 ```
 
