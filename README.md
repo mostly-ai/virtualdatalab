@@ -107,6 +107,20 @@ In addition, we calculate two coherence measures for each attribute over the seq
 * L1-Distance for share of subjects per category
 * L1-Distance for share of distinct categories per subject
 
+The output from `metrics.compare` is 
+
+| Metric Name             | Definition                                                                     |
+|-------------------------|--------------------------------------------------------------------------------|
+| TVD univariate          | The maximum relative frequency deviations with respect to 1 column.            |
+| L1D univariate          | The sum of relative frequency deviations with respect to 1 column.             |
+| L1D bivariate           | The sum of relative frequency deviations with respect to 2 columns.            |
+| L1D 3-way               | The sum of relative frequency deviations with respect to 3 columns.            |
+| L1D 4-way               | The sum of relative frequency deviations with respect to 4 columns.            |
+| L1D Users per Category  | The sum of relative frequency deviations between how many users per category.  |
+| L1D Categories per User | The sum of relative frequency deviations between how many categories per user. |
+
+Bivariate, 3-way, 4-way are calculated even if original data contains less than 2,3,4 columns respectively. 
+
 ### Privacy
 
 ### Individual-Distance Tests
@@ -121,6 +135,9 @@ These metrics quantify the distance between individual synthetic data records to
 
 ![Screenshot](docs/images/nndr.png)
 
+The output from `metrics.compare` is 
+'DCR test': output is PASSED/FAILED depending on outcome of DCR test
+'NNDR test': output is PASSED/FAILED depending on outcome of NNDR test
     
 ## Quick Start
 
