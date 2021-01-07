@@ -1,16 +1,16 @@
-from setuptools import setup, find_packages
+from setuptools import setup
 from setuptools.extension import Extension
 import numpy
+import versioneer
 from Cython.Build import cythonize
-setup(
-    name="virtualdatalab",
-    version="0.1",
-    packages=find_packages(),
-    ext_modules=cythonize(Extension(
+
+ext_modules = cythonize(Extension(
                 "virtualdatalab.cython.cython_metric",
                 sources=["virtualdatalab/cython/cython_metric.pyx"],
-                include_dirs=[numpy.get_include()]),
-            ),
-    package_data={'virtualdatalab':['datasets/data/*.csv']},
-    zip_safe=False
+                include_dirs=[numpy.get_include()]))
+
+setup(
+    version=versioneer.get_version(),
+    ext_modules=ext_modules,
+    package_data={'virtualdatalab':['datasets/data/*.csv']}
 )

@@ -28,3 +28,4 @@ sklearn==0.0
 torch==1.5.1
 torchsummary==1.5.1
 torchvision==0.6.1
+versioneer==0.19.0
