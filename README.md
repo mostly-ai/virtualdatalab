@@ -115,7 +115,17 @@ The output from `metrics.compare` is
 | L1D Users per Category  | The sum of relative frequency deviations between how many users per category.  |
 | L1D Categories per User | The sum of relative frequency deviations between how many categories per user. |
 
+<<<<<<< HEAD
 Bivariate, 3-way, 4-way are calculated even if original data contains less than 2,3,4 columns respectively. 
+=======
+Bivariate, 3-way, 4-way are calculated even if original data contains less than 2,3,4 columns respectively.  
+
+To calculate coherence for the datasets, for both metrics, VDL iterates over all columns of synthetic and target data, and bins them. Binning is done both on categorical or numerical columns. As a next step, VDL calculates L1D scores, which is the sum over all absolute deviations across categorical values.  
+
+* **L1D Users per Category:** for each category column we count the unique number of users and normalize that number, simply by dividing with total number of unique users. After that we calculate an absolute difference and sum up those for each category. As a last step we calculate the mean value over all categories to get the final metric.  
+
+* **L1D Categories per User:** this time we group by users and count the unique number of values of the binned categories. In this case we also normalize, but the category counts by users, then calculate absolute difference and sum that up. The last step is to calculate mean value over all users.  
+
 
 ### Privacy
 
@@ -132,8 +142,16 @@ These metrics quantify the distance between individual synthetic data records to
 ![Screenshot](docs/images/nndr.png)
 
 The output from `metrics.compare` is 
+<<<<<<< HEAD
 'DCR test': output is PASSED/FAILED depending on outcome of DCR test
 'NNDR test': output is PASSED/FAILED depending on outcome of NNDR test
+=======
+
+| Metric Name | Defintion                                                 |
+|-------------|-----------------------------------------------------------|
+| DCR test    | output is PASSED/FAILED depending on outcome of DCR test  |
+| NNDR test   | output is PASSED/FAILED depending on outcome of NNDR test |
+
     
 ## Quick Start
 
@@ -167,6 +185,7 @@ If running on Google Colab
 ! git clone https://github.com/mostly-ai/virtualdatalab.git
 %cd virtualdatalab/virtualdatalab
 !pip install -r requirements.txt
+!python setup.py build_ext --inplace 
 !pip install .
 ```
 
