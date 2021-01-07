@@ -14,7 +14,7 @@ It is recommended to install `virtualdatalab` in a Conda virtual environment to 
 ```bash
 # create conda env named `vdl`
 conda create -y -n vdl python==3.7.7
-conda activate vdlpip
+conda activate vdl
 pip install -r requirements.txt
 pip install . 
 ```
@@ -115,8 +115,7 @@ The output from `metrics.compare` is
 | L1D Users per Category  | The sum of relative frequency deviations between how many users per category.  |
 | L1D Categories per User | The sum of relative frequency deviations between how many categories per user. |
 
-<<<<<<< HEAD
-Bivariate, 3-way, 4-way are calculated even if original data contains less than 2,3,4 columns respectively. 
+
 =======
 Bivariate, 3-way, 4-way are calculated even if original data contains less than 2,3,4 columns respectively.  
 
@@ -142,7 +141,7 @@ These metrics quantify the distance between individual synthetic data records to
 ![Screenshot](docs/images/nndr.png)
 
 The output from `metrics.compare` is 
-<<<<<<< HEAD
+
 'DCR test': output is PASSED/FAILED depending on outcome of DCR test
 'NNDR test': output is PASSED/FAILED depending on outcome of NNDR test
 =======
@@ -183,10 +182,9 @@ If running on Google Colab
 %mkdir vdl
 %cd vdl
 ! git clone https://github.com/mostly-ai/virtualdatalab.git
-%cd virtualdatalab/virtualdatalab
-!pip install -r requirements.txt
-!python setup.py build_ext --inplace 
-!pip install .
+%cd virtualdatalab
+pip install -r requirements.txt
+pip install . 
 ```
 
 References:  
