@@ -115,8 +115,6 @@ The output from `metrics.compare` is
 | L1D Users per Category  | The sum of relative frequency deviations between how many users per category.  |
 | L1D Categories per User | The sum of relative frequency deviations between how many categories per user. |
 
-
-=======
 Bivariate, 3-way, 4-way are calculated even if original data contains less than 2,3,4 columns respectively.  
 
 To calculate coherence for the datasets, for both metrics, VDL iterates over all columns of synthetic and target data, and bins them. Binning is done both on categorical or numerical columns. As a next step, VDL calculates L1D scores, which is the sum over all absolute deviations across categorical values.  
@@ -141,10 +139,6 @@ These metrics quantify the distance between individual synthetic data records to
 ![Screenshot](docs/images/nndr.png)
 
 The output from `metrics.compare` is 
-
-'DCR test': output is PASSED/FAILED depending on outcome of DCR test
-'NNDR test': output is PASSED/FAILED depending on outcome of NNDR test
-=======
 
 | Metric Name | Defintion                                                 |
 |-------------|-----------------------------------------------------------|
