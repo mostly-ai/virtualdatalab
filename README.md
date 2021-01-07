@@ -13,7 +13,7 @@ It is recommended to install `virtualdatalab` in a Conda virtual environment to 
 
 ```bash
 # create conda env named `vdl`
-conda create -y -n vdl python==3.7.7
+conda create -y -n vdl python==3.6.9
 conda activate vdl
 pip install -r requirements.txt
 pip install . 
