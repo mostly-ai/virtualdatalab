@@ -96,7 +96,7 @@ The helper method `target_data_manipulation.prepare_common_data_format` can read
 These metrics quantify the difference between the empirical distributions of the target compared to the synthetic data. Numeric variables are being discretized by binning these into 10 equally-spaced buckets. Categorical variables are considering the top 10 values, and lump together all remaining values into a single bucket.
 
 First, for each subject a single event is randomly selected. Then,  for each column, resp each combination of 2, 3 or 4 columns the distance between empirical distribution is being calculated, and then averaged across a random subset of max. 100 of such combinations:
-* [Total Variation Distance](https://en.wikipedia.org/wiki/Total_variation_distance_of_probability_measures) (TVD) = maximum deviation in relative frequency 
+* Max (MAX) = maximum deviation in relative frequency 
 * [L1-Distance](https://en.wikipedia.org/wiki/Taxicab_geometry) (L1D) of empirical distributions = sum over all deviations in relative frequency
 
 In addition, we calculate two coherence measures for each attribute over the sequence, and .
@@ -107,7 +107,7 @@ The output from `metrics.compare` is
 
 | Metric Name             | Definition                                                                     |
 |-------------------------|--------------------------------------------------------------------------------|
-| TVD univariate          | The maximum relative frequency deviations with respect to 1 column.            |
+| MAX univariate          | The maximum relative frequency deviations with respect to 1 column.            |
 | L1D univariate          | The sum of relative frequency deviations with respect to 1 column.             |
 | L1D bivariate           | The sum of relative frequency deviations with respect to 2 columns.            |
 | L1D 3-way               | The sum of relative frequency deviations with respect to 3 columns.            |

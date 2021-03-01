@@ -1,4 +1,4 @@
-''''
+"""'
 
 
 Provide methods that calculate the distance between two (encoded) sequential datasets:
@@ -14,13 +14,13 @@ Privacy Metrics:
 
 
 
-'''
+"""
 import pandas as pd
 import numpy as np
 import random
 from itertools import product
-from pandas import DataFrame,Series
-from typing import List,Tuple,Dict, Callable
+from pandas import DataFrame, Series
+from typing import List, Tuple, Dict, Callable
 import scipy.stats as ss
 from sklearn.neighbors import NearestNeighbors
 
@@ -30,34 +30,43 @@ from virtualdatalab.target_data_manipulation import _generate_column_type_dictio
 from virtualdatalab.cython.cython_metric import mixed_distance
 
 
-def _bin_data(target_col,
-              syn_col,
-              col_type: str,
-              number_of_bins: int):
+def _bin_data(target_col, syn_col, col_type: str, number_of_bins: int):
     """
     Bin single target/synthetic column.
     """
-    if col_type == 'number':
+    if col_type == "number":
         cardinality = target_col.nunique()
         if cardinality > number_of_bins:
             filled_bins = 0
             q = number_of_bins
             while filled_bins < number_of_bins:
-                binned_target, bins = pd.qcut(target_col, q=q, retbins=True, duplicates='drop', precision=1)
+                binned_target, bins = pd.qcut(
+                    target_col, q=q, retbins=True, duplicates="drop", precision=1
+                )
                 filled_bins = sum(binned_target.value_counts() != 0)
                 q += 1
         else:
             bins = sorted(target_col.unique())
         binned_target = pd.cut(target_col, bins=bins, include_lowest=True, precision=1)
         # if synthetic has categories not in target, na value will appear, that we drop
-        binned_syn = pd.cut(syn_col, bins=bins, include_lowest=True, precision=1).dropna()
-    elif col_type == 'category':
+        binned_syn = pd.cut(
+            syn_col, bins=bins, include_lowest=True, precision=1
+        ).dropna()
+    elif col_type == "category":
         cardinality = target_col.nunique()
         if cardinality > number_of_bins:
-            top_cat = target_col.value_counts().sort_values(ascending=False)[:number_of_bins-1].index.to_list()
-            other = target_col.value_counts().sort_values(ascending=False)[number_of_bins-1:].index.to_list()
+            top_cat = (
+                target_col.value_counts()
+                .sort_values(ascending=False)[: number_of_bins - 1]
+                .index.to_list()
+            )
+            other = (
+                target_col.value_counts()
+                .sort_values(ascending=False)[number_of_bins - 1 :]
+                .index.to_list()
+            )
             first_dictionary = {cat: cat for cat in target_col.unique().to_list()}
-            first_dictionary.update({cat: '*' for cat in other})
+            first_dictionary.update({cat: "*" for cat in other})
             binned_target = target_col.map(first_dictionary)
             # if synthetic has categories not in target, na value will appear, that we drop
             binned_syn = syn_col.map(first_dictionary).dropna()
@@ -73,7 +82,9 @@ def _bin_looped(target, synthetic, column_dictionary, number_of_bins):
     t = pd.DataFrame()
     s = pd.DataFrame()
     for col, col_type in column_dictionary.items():
-        binned_target, binned_syn = _bin_data(target[col], synthetic[col], col_type, number_of_bins)
+        binned_target, binned_syn = _bin_data(
+            target[col], synthetic[col], col_type, number_of_bins
+        )
         t[col] = binned_target
         s[col] = binned_syn
     return t, s
@@ -111,9 +122,9 @@ def _flatten_table(data: DataFrame, column_type_dictionary: dict) -> DataFrame:
 
     """
 
-    to_exclude = ['sequence_pos', 'record_pos', 'id']
+    to_exclude = ["sequence_pos", "record_pos", "id"]
     col_to_melt = [x for x in data.columns if x not in to_exclude]
-    pivot = data.pivot(index='id', columns='sequence_pos', values=col_to_melt)
+    pivot = data.pivot(index="id", columns="sequence_pos", values=col_to_melt)
 
     # Lots of extra steps because pandas.pivot does not preserve column type
 
@@ -124,18 +135,20 @@ def _flatten_table(data: DataFrame, column_type_dictionary: dict) -> DataFrame:
 
     for col in pivot:
         original_col_type = column_type_dictionary[new_columns_to_family[col]]
-        if original_col_type == 'category':
+        if original_col_type == "category":
             pivot[col] = pd.Categorical(pivot[col])
-        elif original_col_type == 'number':
+        elif original_col_type == "number":
             pivot[col] = pd.to_numeric(pivot[col])
 
     return pivot
 
 
-def _prepare_data_for_privacy_metrics(tgt_data: DataFrame,
-                                      syn_data: DataFrame,
-                                      column_dictionary: Dict,
-                                      smoothing_factor:float) -> Tuple[DataFrame, DataFrame]:
+def _prepare_data_for_privacy_metrics(
+    tgt_data: DataFrame,
+    syn_data: DataFrame,
+    column_dictionary: Dict,
+    smoothing_factor: float,
+) -> Tuple[DataFrame, DataFrame]:
     """
     Data preparation for privacy metrics
 
@@ -155,30 +168,36 @@ def _prepare_data_for_privacy_metrics(tgt_data: DataFrame,
     syn_data_p = syn_data.copy(deep=True)
 
     for column_name, column_type in column_dictionary.items():
-        if column_type == 'category':
+        if column_type == "category":
 
             tgt_data_p[column_name] = tgt_data_p[column_name].cat.codes
             syn_data_p[column_name] = syn_data_p[column_name].cat.codes
 
-        elif column_type == 'number':
+        elif column_type == "number":
             # fill na data with mean
-            tgt_data_p[column_name] = tgt_data_p[column_name].fillna(tgt_data_p[column_name].dropna().mean())
-            syn_data_p[column_name] = syn_data_p[column_name].fillna(syn_data_p[column_name].dropna().mean())
+            tgt_data_p[column_name] = tgt_data_p[column_name].fillna(
+                tgt_data_p[column_name].dropna().mean()
+            )
+            syn_data_p[column_name] = syn_data_p[column_name].fillna(
+                syn_data_p[column_name].dropna().mean()
+            )
 
             # standardize
-            tgt_data_p[column_name] = (tgt_data_p[column_name] - tgt_data_p[column_name].mean()) / np.max(
-                [tgt_data_p[column_name].std(), smoothing_factor])
-            syn_data_p[column_name] = (syn_data_p[column_name] - syn_data_p[column_name].mean()) / np.max(
-                [syn_data_p[column_name].std(), smoothing_factor])
+            tgt_data_p[column_name] = (
+                tgt_data_p[column_name] - tgt_data_p[column_name].mean()
+            ) / np.max([tgt_data_p[column_name].std(), smoothing_factor])
+            syn_data_p[column_name] = (
+                syn_data_p[column_name] - syn_data_p[column_name].mean()
+            ) / np.max([syn_data_p[column_name].std(), smoothing_factor])
 
         else:
-            raise Exception(f'{column_type} Type not supported')
+            raise Exception(f"{column_type} Type not supported")
 
     # drop id col since it's not needed
-    tgt_data_p = tgt_data_p.reset_index().drop('id',1)
-    syn_data_p = syn_data_p.reset_index().drop('id',1)
+    tgt_data_p = tgt_data_p.reset_index().drop("id", 1)
+    syn_data_p = syn_data_p.reset_index().drop("id", 1)
 
-    return tgt_data_p,syn_data_p
+    return tgt_data_p, syn_data_p
 
 
 def _get_nn_model(train: DataFrame, cat_slice: int) -> Tuple[np.ndarray]:
@@ -201,10 +220,12 @@ def _get_nn_model(train: DataFrame, cat_slice: int) -> Tuple[np.ndarray]:
     return nearest_neighbor_model
 
 
-def _calculate_dcr_nndr(tgt_data: DataFrame,
-                        syn_data: DataFrame,
-                        column_dictionary: dict,
-                        smoothing_factor: int) -> Tuple[Dict, Dict]:
+def _calculate_dcr_nndr(
+    tgt_data: DataFrame,
+    syn_data: DataFrame,
+    column_dictionary: dict,
+    smoothing_factor: int,
+) -> Tuple[Dict, Dict]:
     """
     Function to calculate dcr and nndr. Since DCR and NNDR are related, both are calculated at the same time.
 
@@ -234,38 +255,46 @@ def _calculate_dcr_nndr(tgt_data: DataFrame,
     feature_columns = np.random.choice(model_columns, sample_feature_amount)
 
     # shift columns to put category features first for distance metric
-    category_columns = [x for x in feature_columns if column_dictionary[x] == 'category']
-    ordered_columns = category_columns + [x for x in feature_columns if column_dictionary[x] == 'number']
+    category_columns = [
+        x for x in feature_columns if column_dictionary[x] == "category"
+    ]
+    ordered_columns = category_columns + [
+        x for x in feature_columns if column_dictionary[x] == "number"
+    ]
     # where do cat columns begin
     cat_slice = len(category_columns)
 
     tgt_data = tgt_data[ordered_columns]
     syn_data = syn_data[ordered_columns]
 
-    assert all(tgt_data.columns == tgt_data.columns), "Train and Syn have mismatched columns"
+    assert all(
+        tgt_data.columns == tgt_data.columns
+    ), "Train and Syn have mismatched columns"
 
     # split into tgt_train, tgt_query, and syn_query
 
     target_size = len(tgt_data)
     synthetic_size = len(syn_data)
 
-    sample_size = min(max_sample_size,
-                      sample_ratio * target_size,
-                      synthetic_size)
+    sample_size = min(max_sample_size, sample_ratio * target_size, synthetic_size)
 
     shuffled_target_train_index = list(tgt_data.index)
     np.random.shuffle(shuffled_target_train_index)
 
-    tgt_train, tgt_query = (tgt_data.loc[shuffled_target_train_index[:-int(sample_size)]],
-                            tgt_data.loc[shuffled_target_train_index[-int(sample_size):]])
+    tgt_train, tgt_query = (
+        tgt_data.loc[shuffled_target_train_index[: -int(sample_size)]],
+        tgt_data.loc[shuffled_target_train_index[-int(sample_size) :]],
+    )
 
     shuffled_target_syn_index = list(syn_data.index)
     np.random.shuffle(shuffled_target_syn_index)
 
     # can be omitted since syn_train is not needed
     # if sample_size = synthetic_size, syn_query is all syn dataset
-    _, syn_query = (syn_data.loc[shuffled_target_syn_index[:-int(sample_size)]],
-                    syn_data.loc[shuffled_target_syn_index[-int(sample_size):]])
+    _, syn_query = (
+        syn_data.loc[shuffled_target_syn_index[: -int(sample_size)]],
+        syn_data.loc[shuffled_target_syn_index[-int(sample_size) :]],
+    )
 
     # training model
     nn_model = _get_nn_model(tgt_train, cat_slice)
@@ -274,44 +303,38 @@ def _calculate_dcr_nndr(tgt_data: DataFrame,
     syn_query_neightbors = nn_model.kneighbors(syn_query, n_neighbors=2)
 
     # Calculating DCR NNDR
-    query_dict = {
-        'tgt': tgt_query_neighbors,
-        'syn': syn_query_neightbors
-    }
+    query_dict = {"tgt": tgt_query_neighbors, "syn": syn_query_neightbors}
 
     privacy_data = {}
 
     for label, query in query_dict.items():
         dcr = query[0][:, 0]
         nndr = query[0][:, 0] / np.maximum(query[0][:, 1], smoothing_factor)
-        df_privacy = pd.DataFrame({'DCR': dcr,
-                                   'NNDR': nndr})
+        df_privacy = pd.DataFrame({"DCR": dcr, "NNDR": nndr})
         privacy_data[label] = df_privacy
 
     # get histograms and bins
     bins = {}
     histograms = {}
 
-    for type_ in ['DCR', 'NNDR']:
+    for type_ in ["DCR", "NNDR"]:
         histograms[type_] = dict()
-        baseline_data = privacy_data['tgt'][type_].dropna()
-        histograms[type_]['tgt'], bins[type_] = np.histogram(
+        baseline_data = privacy_data["tgt"][type_].dropna()
+        histograms[type_]["tgt"], bins[type_] = np.histogram(
             baseline_data, bins=privacy_number_of_bins, density=True
         )
 
-        data = privacy_data['syn'][type_].dropna()
-        histograms[type_]['syn'], _ = np.histogram(
-            data, bins=bins[type_], density=True
-        )
+        data = privacy_data["syn"][type_].dropna()
+        histograms[type_]["syn"], _ = np.histogram(data, bins=bins[type_], density=True)
 
     # norm results
     dcr_nndr_data_norm = {key: df.copy() for key, df in privacy_data.items()}
-    baseline_dcr = dcr_nndr_data_norm['tgt']['DCR']
+    baseline_dcr = dcr_nndr_data_norm["tgt"]["DCR"]
     bound = np.quantile(baseline_dcr[~np.isnan(baseline_dcr)], dcr_quantile)
     for key in dcr_nndr_data_norm:
-        dcr_nndr_data_norm[key]['DCR'] = np.where(
-            dcr_nndr_data_norm[key]['DCR'] <= bound,
-            dcr_nndr_data_norm[key]['DCR'] / bound,
+        dcr_nndr_data_norm[key]["DCR"] = np.where(
+            dcr_nndr_data_norm[key]["DCR"] <= bound,
+            dcr_nndr_data_norm[key]["DCR"] / bound,
             1,
         )
 
@@ -346,16 +369,16 @@ def _calculate_dcr_nndr(tgt_data: DataFrame,
                 np.random.choice(
                     series,
                     sample_size,
-                    replace=bootstrap_kwargs.get(bootstrap_kwargs['repeat'], True),
+                    replace=bootstrap_kwargs.get(bootstrap_kwargs["repeat"], True),
                 )
             )
-            for _ in range(bootstrap_kwargs.get(bootstrap_kwargs['repeat'],1000))
+            for _ in range(bootstrap_kwargs.get(bootstrap_kwargs["repeat"], 1000))
         ]
 
         confidence_interval_low, confidence_interval_high = _empirical_ci(
             sample_value,
             boot_values,
-            alpha=bootstrap_kwargs.get(bootstrap_kwargs['alpha'], 0.05),
+            alpha=bootstrap_kwargs.get(bootstrap_kwargs["alpha"], 0.05),
         )
 
         return sample_value, confidence_interval_low, confidence_interval_high
@@ -368,11 +391,12 @@ def _calculate_dcr_nndr(tgt_data: DataFrame,
         """Bootstrap estimate for a quantile with confidence intervals."""
 
         return _bootstrap_func(
-            series, lambda series_: np.quantile(series_, quantile), bootstrap_kwargs,
+            series,
+            lambda series_: np.quantile(series_, quantile),
+            bootstrap_kwargs,
         )
 
-    def _quantile_test_function(target:Series,
-                                synthetic:Series)-> Dict:
+    def _quantile_test_function(target: Series, synthetic: Series) -> Dict:
         """
         * we look at a set of quantiles
         * we bootstrap each tgt quantile with confidence intervals
@@ -387,108 +411,124 @@ def _calculate_dcr_nndr(tgt_data: DataFrame,
 
         quantiles = np.linspace(0.05, 0.5, 20)
 
-        bootstrap_kwargs = {
-           "repeat":1000,
-            "alpha":0.05
-
-        }
-        alpha_init = bootstrap_kwargs['alpha']
+        bootstrap_kwargs = {"repeat": 1000, "alpha": 0.05}
+        alpha_init = bootstrap_kwargs["alpha"]
         alpha_adj = alpha_init / len(quantiles)
-        bootstrap_kwargs['alpha'] = alpha_adj
+        bootstrap_kwargs["alpha"] = alpha_adj
 
         # boostrap the quantiles
         bootstrap_results = pd.DataFrame(
             index=quantiles,
             columns=[
-                'syn',
-                'tgt',
-                'tgt_ci_low',
-                'tgt_ci_high',
-                'check',
+                "syn",
+                "tgt",
+                "tgt_ci_low",
+                "tgt_ci_high",
+                "check",
             ],
         )
 
         for quantile in quantiles:
-            bootstrap_results.loc[quantile,
-                                  ['tgt', 'tgt_ci_low', 'tgt_ci_high']
+            bootstrap_results.loc[
+                quantile, ["tgt", "tgt_ci_low", "tgt_ci_high"]
             ] = _bootstrap_quantile(target, quantile, bootstrap_kwargs)
-            bootstrap_results.loc[quantile, 'syn'] = np.quantile(synthetic, quantile)
+            bootstrap_results.loc[quantile, "syn"] = np.quantile(synthetic, quantile)
 
-        bootstrap_results['check'] = (
-                bootstrap_results['syn'] >= bootstrap_results['tgt_ci_low']
-                                      )
-        final_check = np.all(bootstrap_results['check'])
+        bootstrap_results["check"] = (
+            bootstrap_results["syn"] >= bootstrap_results["tgt_ci_low"]
+        )
+        final_check = np.all(bootstrap_results["check"])
         bootstrap_results_dict = bootstrap_results.to_dict("series")
 
-        return {
-            'check': final_check,
-            'details': bootstrap_results_dict
-        }
+        return {"check": final_check, "details": bootstrap_results_dict}
 
     privacy_tests = {}
     checks = {}
 
-    for privacy_type in ['DCR', 'NNDR']:
-        tgt_norm = dcr_nndr_data_norm['tgt'][privacy_type]
-        syn_norm = dcr_nndr_data_norm['syn'][privacy_type]
+    for privacy_type in ["DCR", "NNDR"]:
+        tgt_norm = dcr_nndr_data_norm["tgt"][privacy_type]
+        syn_norm = dcr_nndr_data_norm["syn"][privacy_type]
         privacy_tests[privacy_type] = _quantile_test_function(tgt_norm, syn_norm)
-        checks[privacy_type] = 'PASSED' if privacy_tests[privacy_type]['check'] else 'FAILED'
+        checks[privacy_type] = (
+            "PASSED" if privacy_tests[privacy_type]["check"] else "FAILED"
+        )
 
     return checks, privacy_tests
 
-def _calculate_coherence(tgt_data:DataFrame,
-                         syn_data:DataFrame,
-                         type: str, # users_per_category | categories_per_user
-                         number_of_bins:int = 10):
 
-    assert type in ['users_per_category', 'categories_per_user'], "type not recognized"
+def _calculate_coherence(
+    tgt_data: DataFrame,
+    syn_data: DataFrame,
+    type: str,  # users_per_category | categories_per_user
+    number_of_bins: int = 10,
+):
+
+    assert type in ["users_per_category", "categories_per_user"], "type not recognized"
     # check if data is in expected format
-    assert sorted(tgt_data.columns) == sorted(syn_data.columns), "Target and Synthetic have different columns"
+    assert sorted(tgt_data.columns) == sorted(
+        syn_data.columns
+    ), "Target and Synthetic have different columns"
     column_dict = _generate_column_type_dictionary(tgt_data)
 
-    tgt_binned, syn_binned = _bin_looped(tgt_data, syn_data, column_dict, number_of_bins)
+    tgt_binned, syn_binned = _bin_looped(
+        tgt_data, syn_data, column_dict, number_of_bins
+    )
     tgt_binned = tgt_binned.astype(str).reset_index()
     syn_binned = syn_binned.astype(str).reset_index()
 
     result = list()
     for col in list(column_dict):
-        if type == 'users_per_category':
-            tgt_shares = tgt_binned.groupby(by=col, as_index=False).agg({'id': pd.Series.nunique})
-            tgt_shares['id'] = tgt_shares['id'] / tgt_binned['id'].nunique()
-            syn_shares = syn_binned.groupby(by=col, as_index=False).agg({'id': pd.Series.nunique})
-            syn_shares['id'] = syn_shares['id'] / syn_binned['id'].nunique()
-        elif type == 'categories_per_user':
-            tgt_shares = tgt_binned.groupby(by='id').agg({col: pd.Series.nunique})
-            tgt_shares = tgt_shares[col].value_counts(normalize=True).to_frame().reset_index()
-            syn_shares = syn_binned.groupby(by='id').agg({col: pd.Series.nunique})
-            syn_shares = syn_shares[col].value_counts(normalize=True).to_frame().reset_index()
-        tgt_shares.columns = ['value', 'tgt']
-        syn_shares.columns = ['value', 'syn']
-        shares = pd.merge(tgt_shares, syn_shares, on='value', how='left')
-        shares['syn'] = shares['syn'].fillna(0)
-        diff = np.abs(shares['tgt'] - shares['syn'])
-        out = pd.DataFrame({'label': [col],
-                            'type': type,
-                            'tvd': np.max(diff),
-                            'l1d': np.sum(diff),
-                            'l2d': np.sqrt(np.sum(diff ** 2))})
+        if type == "users_per_category":
+            tgt_shares = tgt_binned.groupby(by=col, as_index=False).agg(
+                {"id": pd.Series.nunique}
+            )
+            tgt_shares["id"] = tgt_shares["id"] / tgt_binned["id"].nunique()
+            syn_shares = syn_binned.groupby(by=col, as_index=False).agg(
+                {"id": pd.Series.nunique}
+            )
+            syn_shares["id"] = syn_shares["id"] / syn_binned["id"].nunique()
+        elif type == "categories_per_user":
+            tgt_shares = tgt_binned.groupby(by="id").agg({col: pd.Series.nunique})
+            tgt_shares = (
+                tgt_shares[col].value_counts(normalize=True).to_frame().reset_index()
+            )
+            syn_shares = syn_binned.groupby(by="id").agg({col: pd.Series.nunique})
+            syn_shares = (
+                syn_shares[col].value_counts(normalize=True).to_frame().reset_index()
+            )
+        tgt_shares.columns = ["value", "tgt"]
+        syn_shares.columns = ["value", "syn"]
+        shares = pd.merge(tgt_shares, syn_shares, on="value", how="left")
+        shares["syn"] = shares["syn"].fillna(0)
+        diff = np.abs(shares["tgt"] - shares["syn"])
+        out = pd.DataFrame(
+            {
+                "label": [col],
+                "type": type,
+                "max": np.max(diff),
+                "l1d": np.sum(diff),
+                "l2d": np.sqrt(np.sum(diff ** 2)),
+            }
+        )
 
         result.append(out)
 
     return pd.concat(result)
 
 
+def _calculate_statistical_distances(
+    tgt_data: DataFrame,
+    syn_data: DataFrame,
+    type: str,  # 1dim | 2dim | 3dim | 4dim
+    number_of_bins: int = 10,
+    max_combinations: int = 100,
+):
 
-
-def _calculate_statistical_distances(tgt_data:DataFrame,
-                                     syn_data:DataFrame,
-                                     type: str, # 1dim | 2dim | 3dim | 4dim
-                                     number_of_bins:int = 10,
-                                     max_combinations:int = 100):
-
-    assert type in ['1dim', '2dim', '3dim', '4dim'], "type not recognized"
+    assert type in ["1dim", "2dim", "3dim", "4dim"], "type not recognized"
     # check if data is in expected format
-    assert sorted(tgt_data.columns) == sorted(syn_data.columns), "Target and Synthetic have different columns"
+    assert sorted(tgt_data.columns) == sorted(
+        syn_data.columns
+    ), "Target and Synthetic have different columns"
     column_dict = _generate_column_type_dictionary(tgt_data)
 
     def _sample_one_event(data: DataFrame) -> DataFrame:
@@ -498,58 +538,72 @@ def _calculate_statistical_distances(tgt_data:DataFrame,
         # set seed to ensure same rows are considered across synthesizers
         random.seed(a=123)
         # determine sequence length for each id
-        seq_lens = data.reset_index().groupby('id').size()
+        seq_lens = data.reset_index().groupby("id").size()
         # randomly draw a sequence_pos for each id
-        draws = pd.DataFrame({'sequence_pos': np.floor(np.random.rand(len(seq_lens)) * seq_lens).astype(
-            int)}).reset_index()
+        draws = pd.DataFrame(
+            {
+                "sequence_pos": np.floor(
+                    np.random.rand(len(seq_lens)) * seq_lens
+                ).astype(int)
+            }
+        ).reset_index()
         # inner join with provided dataframe to filter to drawn records
-        out = pd.merge(draws, data, on=['id', 'sequence_pos']).drop(columns='sequence_pos').set_index('id')
+        out = (
+            pd.merge(draws, data, on=["id", "sequence_pos"])
+            .drop(columns="sequence_pos")
+            .set_index("id")
+        )
         return out
 
     tgt_sample = _sample_one_event(tgt_data)
     syn_sample = _sample_one_event(syn_data)
-    tgt_binned, syn_binned = _bin_looped(tgt_sample,
-                                         syn_sample,
-                                         column_dict,
-                                         number_of_bins)
+    tgt_binned, syn_binned = _bin_looped(
+        tgt_sample, syn_sample, column_dict, number_of_bins
+    )
     tgt_binned = tgt_binned.astype(str)
     syn_binned = syn_binned.astype(str)
 
     def calc_shares(df_binned, label):
         shares = df_binned.value_counts().reset_index()
-        shares.columns = ['bins', label]
+        shares.columns = ["bins", label]
         shares[label] = shares[label] / shares[label].sum()
         return shares
 
-    if type == '1dim':
-        cross = pd.DataFrame({'col_1': tgt_data.columns.to_list()})
-        cross['col_2'] = 'all'
-        cross['col_3'] = 'all'
-        cross['col_4'] = 'all'
-    elif type == '2dim':
-        cols_1 = pd.DataFrame({'col_1': tgt_data.columns.to_list(), 'key': 'xyz'})
-        cols_2 = pd.DataFrame({'col_2': tgt_data.columns.to_list(), 'key': 'xyz'})
-        cross = pd.merge(cols_1, cols_2, on='key').drop('key', axis=1)
-        cross['col_3'] = 'all'
-        cross['col_4'] = 'all'
-    elif type == '3dim':
-        cols_1 = pd.DataFrame({'col_1': tgt_data.columns.to_list(), 'key': 'xyz'})
-        cols_2 = pd.DataFrame({'col_2': tgt_data.columns.to_list(), 'key': 'xyz'})
-        cols_3 = pd.DataFrame({'col_3': tgt_data.columns.to_list(), 'key': 'xyz'})
-        cross = pd.merge(pd.merge(cols_1, cols_2, on='key'), cols_3, on='key').drop('key', axis=1)
-        cross['col_4'] = 'all'
-    elif type == '4dim':
-        cols_1 = pd.DataFrame({'col_1': tgt_data.columns.to_list(), 'key': 'xyz'})
-        cols_2 = pd.DataFrame({'col_2': tgt_data.columns.to_list(), 'key': 'xyz'})
-        cols_3 = pd.DataFrame({'col_3': tgt_data.columns.to_list(), 'key': 'xyz'})
-        cols_4 = pd.DataFrame({'col_4': tgt_data.columns.to_list(), 'key': 'xyz'})
-        cross = pd.merge(pd.merge(pd.merge(cols_1, cols_2, on='key'), cols_3, on='key'), cols_4, on='key').drop('key', axis=1)
+    if type == "1dim":
+        cross = pd.DataFrame({"col_1": tgt_data.columns.to_list()})
+        cross["col_2"] = "all"
+        cross["col_3"] = "all"
+        cross["col_4"] = "all"
+    elif type == "2dim":
+        cols_1 = pd.DataFrame({"col_1": tgt_data.columns.to_list(), "key": "xyz"})
+        cols_2 = pd.DataFrame({"col_2": tgt_data.columns.to_list(), "key": "xyz"})
+        cross = pd.merge(cols_1, cols_2, on="key").drop("key", axis=1)
+        cross["col_3"] = "all"
+        cross["col_4"] = "all"
+    elif type == "3dim":
+        cols_1 = pd.DataFrame({"col_1": tgt_data.columns.to_list(), "key": "xyz"})
+        cols_2 = pd.DataFrame({"col_2": tgt_data.columns.to_list(), "key": "xyz"})
+        cols_3 = pd.DataFrame({"col_3": tgt_data.columns.to_list(), "key": "xyz"})
+        cross = pd.merge(pd.merge(cols_1, cols_2, on="key"), cols_3, on="key").drop(
+            "key", axis=1
+        )
+        cross["col_4"] = "all"
+    elif type == "4dim":
+        cols_1 = pd.DataFrame({"col_1": tgt_data.columns.to_list(), "key": "xyz"})
+        cols_2 = pd.DataFrame({"col_2": tgt_data.columns.to_list(), "key": "xyz"})
+        cols_3 = pd.DataFrame({"col_3": tgt_data.columns.to_list(), "key": "xyz"})
+        cols_4 = pd.DataFrame({"col_4": tgt_data.columns.to_list(), "key": "xyz"})
+        cross = pd.merge(
+            pd.merge(pd.merge(cols_1, cols_2, on="key"), cols_3, on="key"),
+            cols_4,
+            on="key",
+        ).drop("key", axis=1)
 
     # set seed to ensure same variable combinations are considered across synthesizers
     random.seed(a=123)
     cross = cross.sample(min(cross.shape[0], max_combinations))
-    tgt_binned['all'] = 'all'
-    syn_binned['all'] = 'all'
+    tgt_binned["all"] = "all"
+    syn_binned["all"] = "all"
 
     result = list()
     for i in range(cross.shape[0]):
@@ -557,27 +611,43 @@ def _calculate_statistical_distances(tgt_data:DataFrame,
         col_2 = list(cross.col_2)[i]
         col_3 = list(cross.col_3)[i]
         col_4 = list(cross.col_4)[i]
-        col_label = col_1 + '|' + col_2 + '|' + col_3 + '|' + col_4
-        tgt_values = tgt_binned[col_1] + '|' + \
-                     tgt_binned[col_2] + '|' + \
-                     tgt_binned[col_3] + '|' + \
-                     tgt_binned[col_4]
-        syn_values = syn_binned[col_1] + '|' + \
-                     syn_binned[col_2] + '|' + \
-                     syn_binned[col_3] + '|' + \
-                     syn_binned[col_4]
-        shares = pd.merge(calc_shares(tgt_values, 'tgt'),
-                          calc_shares(syn_values, 'syn'),
-                          how='left')
-        shares['syn'] = shares['syn'].fillna(0)
-        diff = np.abs(shares['tgt'] - shares['syn'])
-        hell = np.sqrt(np.sum((np.sqrt(shares['tgt']) - np.sqrt(shares['syn'])) ** 2)) / np.sqrt(2)
-        out = pd.DataFrame({'label': [col_label],
-                            'type': type,
-                            'tvd': np.max(diff),
-                            'l1d': np.sum(diff),
-                            'l2d': np.sqrt(np.sum(diff ** 2)),
-                            'hellinger': hell})
+        col_label = col_1 + "|" + col_2 + "|" + col_3 + "|" + col_4
+        tgt_values = (
+            tgt_binned[col_1]
+            + "|"
+            + tgt_binned[col_2]
+            + "|"
+            + tgt_binned[col_3]
+            + "|"
+            + tgt_binned[col_4]
+        )
+        syn_values = (
+            syn_binned[col_1]
+            + "|"
+            + syn_binned[col_2]
+            + "|"
+            + syn_binned[col_3]
+            + "|"
+            + syn_binned[col_4]
+        )
+        shares = pd.merge(
+            calc_shares(tgt_values, "tgt"), calc_shares(syn_values, "syn"), how="left"
+        )
+        shares["syn"] = shares["syn"].fillna(0)
+        diff = np.abs(shares["tgt"] - shares["syn"])
+        hell = np.sqrt(
+            np.sum((np.sqrt(shares["tgt"]) - np.sqrt(shares["syn"])) ** 2)
+        ) / np.sqrt(2)
+        out = pd.DataFrame(
+            {
+                "label": [col_label],
+                "type": type,
+                "max": np.max(diff),
+                "l1d": np.sum(diff),
+                "l2d": np.sqrt(np.sum(diff ** 2)),
+                "hellinger": hell,
+            }
+        )
 
         result.append(out)
 
@@ -587,13 +657,14 @@ def _calculate_statistical_distances(tgt_data:DataFrame,
     return pd.concat(result)
 
 
-def _calculate_privacy_tests(tgt_data: DataFrame,
-                             syn_data: DataFrame):
+def _calculate_privacy_tests(tgt_data: DataFrame, syn_data: DataFrame):
     """
     Compute privacy tests for a given target and synthetic data set
     """
 
-    assert sorted(tgt_data.columns) == sorted(syn_data.columns), "Target and Synthetic have different columns"
+    assert sorted(tgt_data.columns) == sorted(
+        syn_data.columns
+    ), "Target and Synthetic have different columns"
 
     tgt_dict = _generate_column_type_dictionary(tgt_data)
     syn_dict = _generate_column_type_dictionary(syn_data)
@@ -606,17 +677,21 @@ def _calculate_privacy_tests(tgt_data: DataFrame,
     column_dict = _generate_column_type_dictionary(flat_table_target)
 
     smoothing_factor = 1e-8
-    tgt_data_p, syn_data_p = _prepare_data_for_privacy_metrics(flat_table_target, flat_table_syn,
-                                                               column_dict, smoothing_factor)
+    tgt_data_p, syn_data_p = _prepare_data_for_privacy_metrics(
+        flat_table_target, flat_table_syn, column_dict, smoothing_factor
+    )
 
-    checks, privacy_tests = _calculate_dcr_nndr(tgt_data_p, syn_data_p, column_dict, smoothing_factor)
+    checks, privacy_tests = _calculate_dcr_nndr(
+        tgt_data_p, syn_data_p, column_dict, smoothing_factor
+    )
     return checks
 
 
-def compare(tgt_data:DataFrame,
-            syn_data:DataFrame,
-            metrics_to_return:List = ['statistical-distances', 'privacy-tests']
-            ) -> Dict:
+def compare(
+    tgt_data: DataFrame,
+    syn_data: DataFrame,
+    metrics_to_return: List = ["statistical-distances", "privacy-tests"],
+) -> Dict:
     """
     Compare a target and synthetic dataset and returns metrics
 
@@ -630,25 +705,28 @@ def compare(tgt_data:DataFrame,
     check_common_data_format(syn_data)
     metrics_dict = {}
 
-    if 'statistical-distances' in metrics_to_return:
-        stat_1dim = _calculate_statistical_distances(tgt_data, syn_data, '1dim')
-        stat_2dim = _calculate_statistical_distances(tgt_data, syn_data, '2dim')
-        stat_3dim = _calculate_statistical_distances(tgt_data, syn_data, '3dim')
-        stat_4dim = _calculate_statistical_distances(tgt_data, syn_data, '4dim')
-        stat_upc = _calculate_coherence(tgt_data, syn_data, 'users_per_category')
-        stat_cpu = _calculate_coherence(tgt_data, syn_data, 'categories_per_user')
-        def agg(x): return np.round(np.mean(x), 5)
-        metrics_dict['TVD univariate'] = agg(stat_1dim['tvd'])
-        metrics_dict['L1D univariate'] = agg(stat_1dim['l1d'])
-        metrics_dict['L1D bivariate'] = agg(stat_2dim['l1d'])
-        metrics_dict['L1D 3-way'] = agg(stat_3dim['l1d'])
-        metrics_dict['L1D 4-way'] = agg(stat_4dim['l1d'])
-        metrics_dict['L1D Users per Category'] = agg(stat_upc['l1d'])
-        metrics_dict['L1D Categories per User'] = agg(stat_cpu['l1d'])
+    if "statistical-distances" in metrics_to_return:
+        stat_1dim = _calculate_statistical_distances(tgt_data, syn_data, "1dim")
+        stat_2dim = _calculate_statistical_distances(tgt_data, syn_data, "2dim")
+        stat_3dim = _calculate_statistical_distances(tgt_data, syn_data, "3dim")
+        stat_4dim = _calculate_statistical_distances(tgt_data, syn_data, "4dim")
+        stat_upc = _calculate_coherence(tgt_data, syn_data, "users_per_category")
+        stat_cpu = _calculate_coherence(tgt_data, syn_data, "categories_per_user")
 
-    if 'privacy-tests' in metrics_to_return:
+        def agg(x):
+            return np.round(np.mean(x), 5)
+
+        metrics_dict["MAX univariate"] = agg(stat_1dim["max"])
+        metrics_dict["L1D univariate"] = agg(stat_1dim["l1d"])
+        metrics_dict["L1D bivariate"] = agg(stat_2dim["l1d"])
+        metrics_dict["L1D 3-way"] = agg(stat_3dim["l1d"])
+        metrics_dict["L1D 4-way"] = agg(stat_4dim["l1d"])
+        metrics_dict["L1D Users per Category"] = agg(stat_upc["l1d"])
+        metrics_dict["L1D Categories per User"] = agg(stat_cpu["l1d"])
+
+    if "privacy-tests" in metrics_to_return:
         checks = _calculate_privacy_tests(tgt_data, syn_data)
-        metrics_dict['DCR test'] = checks['DCR']
-        metrics_dict['NNDR test'] = checks['NNDR']
+        metrics_dict["DCR test"] = checks["DCR"]
+        metrics_dict["NNDR test"] = checks["NNDR"]
 
     return metrics_dict
