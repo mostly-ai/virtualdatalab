@@ -212,3 +212,8 @@ class MyGenerator(BaseSynthesizer):
         
         return generated_data
 ```
+
+## Acknowledgments
+
+This research is supported by the "ICT of the Future” funding programme of the Austrian Federal Ministry for Climate Action, Environment, Energy, Mobility, Innovation and Technology.
+
