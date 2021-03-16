@@ -15,5 +15,5 @@ ext_modules = cythonize(
 setup(
     version=versioneer.get_version(),
     ext_modules=ext_modules,
-    package_data={"virtualdatalab": ["datasets/data/*.csv"]},
+    package_data={"virtualdatalab": ["datasets/data/*"]},
 )
