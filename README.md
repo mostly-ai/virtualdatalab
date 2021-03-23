@@ -47,7 +47,7 @@ The helper method `target_data_manipulation.prepare_common_data_format` can read
         * `target_data_generate.generate_simple_seq_dummy`
         * numeric columns [0,1] uniform
         * categorical alphabet uniformly drawn
-    * Selected real-word datasets
+    * Selected real-world datasets
         * CDNOW - Online purchase for CDs
             * `virtualdatalab.datasets.loader.load_cdnow()`
             * 19'625 users with a sequence of 5 purchases
