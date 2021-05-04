@@ -51,11 +51,11 @@ The helper method `target_data_manipulation.prepare_common_data_format` can read
     * Selected real-world datasets
         * CDNOW - Online purchase for CDs
             * `virtualdatalab.datasets.loader.load_cdnow()`
-            * 19'625 users with a sequence of 5 purchases
+            * 3,925 users with a sequence of 5 purchases
             * source: http://www.brucehardie.com/datasets/
         * BERKA - Retail bank transactions
             * `virtualdatalab.datasets.loader.load_berka()`
-            * 44'000 users with a sequence of 10 transactions
+            * 4,400 users with a sequence of 10 transactions
             * source: https://data.world/lpetrocelli/czech-financial-dataset-real-anonymized-transactions
         * MLB - Batting statistics for MLB players
             * `virtualdatalab.datasets.loader.load_mlb()`
