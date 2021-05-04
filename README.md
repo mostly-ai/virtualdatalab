@@ -2,7 +2,7 @@
 
 The Virtual Data Lab is a python-based framework to assess generative models for sequential data with respect to their *accuracy* as well as *privacy* given a range of real-world and machine-generated datasets. In addition, it contains basic synthesizers capable of sequential data generation. The DL-based generative models, developed by [MOSTLY AI](https://mostly.ai/) as part of their commercial offering, are not part of this package.
 
-* License: [GPLv3](LICENSE)
+* License: [GPLv3](LICENSE.txt)
 
 It is comparable to the [SDGym](https://github.com/sdv-dev/SDGym) by MIT, but differs in terms of its sole focus on sequential data, and its inclusion of privacy metrics.
 
