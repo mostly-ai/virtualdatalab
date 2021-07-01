@@ -301,13 +301,15 @@ class Analysis:
         overlap = len(intersection) / len(union)
 
         return list(intersection), overlap
-    
+
+
     def shared_vocab(T1 : Corpus, T2 : Corpus) -> List[str] :
         vocab, score = Analysis._vocab_overlap(T1.properties.word_frequency.keys(), T2.properties.word_frequency.keys())
         return vocab
 
+
     @staticmethod
-    def sentence_length_similarity(T1 : Corpus, T2 : Corpus) -> float :
+    def corpus_sentence_length_similarity(T1 : Corpus, T2 : Corpus) -> float :
         """
         Calculate a similarity score [0.0, 1.0] (1.0 == identical) that is based
         on the sentence length distribution of two corpora.
@@ -317,9 +319,13 @@ class Analysis:
         fmax = np.max([F1, F2], axis=0)
 
         # Calculate the max normalized L1 distance in the range of Q0.1 to Q0.9
-        score = 1.0 - (np.divide(np.abs(F1-F2), fmax)[1:-1].sum() / 9.0)
+        MAGIC_NUMBER=2.0
+        score = 1.0 - MAGIC_NUMBER*(np.divide(np.abs(F1-F2), fmax)[1:-1].mean())
+
         return score
 
+
+    @staticmethod
     def word_frequency_similarity(W1 : Dict[str, int], W2 : Dict[str, int]) -> float:
         shared_vocab, shared_vocab_score = Analysis._vocab_overlap(W1, W2)
         if shared_vocab == []:
@@ -351,14 +357,19 @@ class Analysis:
         """
         return Analysis.word_frequency_similarity(T1.properties.word_frequency, T2.properties.word_frequency)
 
+
     @staticmethod
-    def bigram_similarity(T1 : Corpus, T2 : Corpus) -> float :
+    def corpus_bigram_similarity(T1 : Corpus, T2 : Corpus) -> float :
+        """
+        Calculate the average vocab_overlap score for each word in the shared vocab
+        """
         shared_vocab = Analysis.shared_vocab(T1, T2)
 
         wfs = []
         for word in shared_vocab:
             _, score = Analysis._vocab_overlap(T1.properties.bigram[word], T2.properties.bigram[word])
             wfs.append(score)
+
         # calculate the word frequency similarity for each word in the shared_vocab
         #wfs = [Analysis._word_frequency_similarity(T1.properties.bigram[word], T2.properties.bigram[word]) for word in shared_vocab]
         #score = np.mean(wfs)
@@ -369,7 +380,7 @@ class Analysis:
     @staticmethod
     def corpus_similarity(T1 : Corpus, T2 : Corpus) -> Dict[str, float]:
         sim = {}
-        sim["sentence_length"] = Analysis.sentence_length_similarity(T1, T2)
+        sim["sentence_length"] = Analysis.corpus_sentence_length_similarity(T1, T2)
         sim["word_frequency"] = Analysis.corpus_word_frequency_similarity(T1, T2)
-        sim["bigram"] = Analysis.bigram_similarity(T1, T2)
+        sim["bigram"] = Analysis.corpus_bigram_similarity(T1, T2)
         return sim
