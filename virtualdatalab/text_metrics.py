@@ -17,7 +17,9 @@ import glob
 import json
 
 import numpy as np
-from numpy.lib.function_base import quantile, select
+from numpy.random import default_rng
+rng = default_rng()
+
 from virtualdatalab.logging import getLogger
 log = getLogger(__name__, stdout=True)
 
@@ -42,13 +44,17 @@ class Properties:
     word_frequency : Dict[str, int]    
     bigram : Dict[str, Dict[str, int]]
     word_frequency_distribution : List[int]
+    sample : List[str]
+    clean_sample : List[str]
 
-    def __init__(self, nWords : int, nSentences : int, sentence_length_distribution : List[int], word_frequency : Dict[str, int], bigram : Dict[str, Dict[str, int]]):
+    def __init__(self, nWords : int, nSentences : int, sentence_length_distribution : List[int], word_frequency : Dict[str, int], bigram : Dict[str, Dict[str, int]], sample : List[str], clean_sample : List[str]):
         self.nWords = nWords
         self.nSentences = nSentences
         self.sentence_length_distribution = sentence_length_distribution
         self.word_frequency = word_frequency
         self.bigram = bigram
+        self.sample = sample
+        self.clean_sample = clean_sample
 
         self.word_frequency_distribution = np.quantile(list(self.word_frequency.values()), np.linspace(0, 1.0, 11)).astype(int).tolist()
 
@@ -66,9 +72,58 @@ class Properties:
             return Properties(**data)
 
 
- 
+@dataclass
+class Perturbation:
+    word_deletion : float
+    word_repetition : float
+    word_switch : float
+    sentence_merging : float
+    MAX_REPETITIONS = 4
 
-def integerSplit(N, splits):
+    def apply(self, sentences : List[str]) -> List[str] :
+        N = len(sentences)
+        deletion = rng.choice([0, 1], size=N, p=[1.0 - self.word_deletion, self.word_deletion])
+        repetition = rng.choice([0, 1], size=N, p=[1.0 - self.word_repetition, self.word_repetition])
+        switch = rng.choice([0, 1], size=N, p=[1.0 - self.word_switch, self.word_switch])
+        merging = rng.choice([0, 1], size=N, p=[1.0 - self.sentence_merging, self.sentence_merging])
+        print(f"sentences: {len(sentences)}, deletion: {deletion.sum()}, repetition: {repetition.sum()}, switch: {switch.sum()}, merging: {merging.sum()}")
+    
+        perturbed = []
+        for s, ns, delete, repeat, switch, merge in zip(sentences[0:-1], sentences[1:], deletion, repetition, switch, merging) :
+            # s ... sentence
+            # ns ... next sentence
+            # ps ... perturbed sentence
+            if len(s) == 0:
+                continue
+
+            ps = s.copy()
+            if merge & len(ns) > 1:
+                ps.extend(ns[0:rng.integers(len(ns))])
+            if repeat:
+                pos = rng.integers(len(ps))
+                cnt = rng.integers(2, self.MAX_REPETITIONS)
+                _ = [ps.insert(pos, ps[pos]) for i in range(cnt)]
+            if switch & len(ps)>1:
+                pos = rng.integers(len(ps)-1)
+                tmp = ps.pop(pos+1)
+                ps.insert(pos, tmp)
+            if delete:
+                ps.pop(rng.integers(len(ps)))
+            
+            perturbed.append(ps)
+        # Just add the last sentence unperturbed in order to have the same number of sentences
+        perturbed.append(ns)
+
+        return perturbed 
+    
+    def toDict(self):
+        return dataclasses.asdict(self)
+    
+    @classmethod
+    def fromDict(cls, params : Dict):
+        return cls(**params)
+
+def integerSplit(N : int, splits : int) -> List[int]:
     """
     Helper function to split an array of size N into `splits` parts without overlap
     """
@@ -83,7 +138,7 @@ def integerSplit(N, splits):
     return idxrange
 
 
-def strip_symbols(lines, symbols=[',', '.', '!', '?', ':', '"', '\'', ';', '(', ')', '#', '/', '`', '“', '„'], replacement=''):
+def strip_symbols(lines : List[str], symbols=[',', '.', '!', '?', ':', '"', '\'', ';', '(', ')', '#', '/', '`', '“', '„', '”'], replacement='') -> List[str]:
     """
     Replace all symbols in a given list of strings
     """
@@ -94,65 +149,78 @@ def strip_symbols(lines, symbols=[',', '.', '!', '?', ':', '"', '\'', ';', '(', 
     return lines
 
 
-def map_text_properties(text_file : str, line_sep : str, word_sep : str, lowpass : bool) -> Properties:
+
+def map_text_properties(text_file : str, line_sep : str, word_sep : str, lowpass : bool, perturbation : Perturbation) -> Properties:
     """
     Map step that reads a text file from disk, and extracts text properties.
 
     This will run in its own sub process!
     """
-    with open(text_file, 'r') as f:
-        lines = f.read().splitlines()
-    nSentences = len(lines)
+    try:
+        with open(text_file, 'r') as f:
+            lines = f.read().splitlines()
+        nSentences = len(lines)
 
-    # Remove all unwanted symbols from the input, leaving lines with words only
-    clean_lines = strip_symbols(lines)
-    sentence_length_distribution = [len(l) for l in clean_lines]
+        # Remove all unwanted symbols from the input, leaving lines with words only
+        clean_lines = strip_symbols(lines)
 
-    # Extract one long list of words/tokens
-    words = []
-    _ = [words.extend(l.split(word_sep)) for l in clean_lines]
-    nWords = len(words)
+        split_sentences = [l.split(word_sep) for l in clean_lines]
+        if perturbation:
+            p = Perturbation.fromDict(perturbation)
+            split_sentences = p.apply(split_sentences)
 
-    # Calculate word coocurrences (bidirectional bigram)
-    word_freq = {}
-    word_cooc = {}
-    for w1, w2 in zip(words[:-1], words[1:]):
-        # Word freq
-        word_freq[w1] = word_freq.get(w1, 0) + 1
+        sentence_length_distribution = [len(l) for l in split_sentences]
+        # Extract one long list of words/tokens
+        words = []
+        _ = [words.extend(s) for s in split_sentences]
+        nWords = len(words)
 
-        # Forward
-        w1_neighbours = word_cooc.get(w1, {})
-        w1_neighbours[w2] = w1_neighbours.get(w2, 0) + 1
-        word_cooc[w1] = w1_neighbours
+        # Calculate word coocurrences (bidirectional bigram)
+        word_freq = {}
+        word_cooc = {}
+        for w1, w2 in zip(words[:-1], words[1:]):
+            # Word freq
+            word_freq[w1] = word_freq.get(w1, 0) + 1
 
-        # Backward
-        w2_neighbours = word_cooc.get(w2, {})
-        w2_neighbours[w1] = w2_neighbours.get(w1, 0) + 1
-        word_cooc[w2] = w2_neighbours
-    
-    # If approxmation is set, remove words that are present less or equal to TOKEN_THRESHOLD
-    if lowpass:
-        drop_words = [k for k, v in word_freq.items() if v <= TOKEN_THRESHOLD]
-        _ = [word_freq.pop(word) for word in drop_words]
+            # Forward
+            w1_neighbours = word_cooc.get(w1, {})
+            w1_neighbours[w2] = w1_neighbours.get(w2, 0) + 1
+            word_cooc[w1] = w1_neighbours
 
-        drop_center_words = []
-        for center_word, neighborhood in word_cooc.items():
-            drop_words = [k for k, v in neighborhood.items() if v <= TOKEN_THRESHOLD]
-            # In case we would drop the complete neighborhood drop the whole key
-            if len(drop_words) == len(neighborhood):
-                drop_words.append(center_word)
-            else:
-                _ = [neighborhood.pop(word) for word in drop_words]
-                word_cooc[center_word] = neighborhood
+            # Backward
+            w2_neighbours = word_cooc.get(w2, {})
+            w2_neighbours[w1] = w2_neighbours.get(w1, 0) + 1
+            word_cooc[w2] = w2_neighbours
         
-        _ = [word_cooc.pop(word) for word in drop_center_words] 
+        # If approxmation is set, remove words that are present less or equal to TOKEN_THRESHOLD
+        if lowpass:
+            drop_words = [k for k, v in word_freq.items() if v <= TOKEN_THRESHOLD]
+            _ = [word_freq.pop(word) for word in drop_words]
+
+            drop_center_words = []
+            for center_word, neighborhood in word_cooc.items():
+                drop_words = [k for k, v in neighborhood.items() if v <= TOKEN_THRESHOLD]
+                # In case we would drop the complete neighborhood drop the whole key
+                if len(drop_words) == len(neighborhood):
+                    drop_words.append(center_word)
+                else:
+                    _ = [neighborhood.pop(word) for word in drop_words]
+                    word_cooc[center_word] = neighborhood
+            
+            _ = [word_cooc.pop(word) for word in drop_center_words] 
+
+    except Exception as e:
+        print(f'Analysing text partitioned failed in map! {e}')
+
 
     return Properties(
         nWords=nWords,
         nSentences=nSentences,
         sentence_length_distribution=sentence_length_distribution,
         bigram=word_cooc,
-        word_frequency=word_freq
+        word_frequency=word_freq,
+        sample = [word_sep.join(split_sentences[1]),],
+        clean_sample=[clean_lines[1],]
     )
 
 def _quantiles(frequencies : List[int]) -> List[int] :
@@ -167,6 +235,8 @@ def reduce_text_properties(properties : List[Properties]) -> Properties :
     sentence_length_distribution = []
     word_frequency = {}
     bigram = {}
+    samples = []
+    clean_samples = []
 
     for p in properties:
         nWords += p.nWords
@@ -183,6 +253,9 @@ def reduce_text_properties(properties : List[Properties]) -> Properties :
             for n, cnt in neighbours.items():
                 wn[n] = wn.get(n, 0) + cnt
             bigram[word] = wn
+        
+        samples.extend(p.sample)
+        clean_samples.extend(p.clean_sample)
 
     sentence_length_distribution = _quantiles(sentence_length_distribution) 
 
@@ -191,7 +264,9 @@ def reduce_text_properties(properties : List[Properties]) -> Properties :
         nSentences=nSentences,
         sentence_length_distribution=sentence_length_distribution,
         word_frequency=word_frequency,
-        bigram=bigram
+        bigram=bigram,
+        sample=samples,
+        clean_sample = clean_samples
     )
 
 
@@ -201,6 +276,7 @@ class Corpus:
     """
     name : str = ''
     properties : Properties
+    perturbation : Perturbation
     _text_workspace = []
 
     def __init__(self, name : str, word_sep = ' ', sentence_sep = '\n'):
@@ -213,8 +289,9 @@ class Corpus:
         return f"Text corpus [{self.name}] : {self.properties}"
 
     @classmethod
-    def fromFile(cls, name : str, path : str):
+    def fromFile(cls, name : str, path : str, perturbation : Perturbation = None):
         text = cls(name)
+        text.perturbation = perturbation
         text._load_file(path)
         return text
     
@@ -235,12 +312,16 @@ class Corpus:
                 try:
                     self.properties = self._analyze(files, nPartitions)
                 except Exception as e:
+                    from pudb.forked import set_trace as st; st()
                     log.error(f"Analyzing text properties, failed! {e}")
             else:
                 log.error("splitting text file for multi-thread processing failed!")
 
     def _analyze(self, files, nProcess, lowpass=True) -> Properties:
-        args = [(file, self.sentence_sep, self.word_sep, lowpass) for file in files]
+        if self.perturbation:
+            args = [(file, self.sentence_sep, self.word_sep, lowpass, self.perturbation.toDict()) for file in files]
+        else:
+            args = [(file, self.sentence_sep, self.word_sep, lowpass, None) for file in files]
 
         nProcess = multiprocessing.cpu_count()
         with Pool(nProcess) as p:
@@ -384,3 +465,4 @@ class Analysis:
         sim["word_frequency"] = Analysis.corpus_word_frequency_similarity(T1, T2)
         sim["bigram"] = Analysis.corpus_bigram_similarity(T1, T2)
         return sim
+    
