@@ -78,6 +78,7 @@ class Perturbation:
     word_repetition : float
     word_switch : float
     sentence_merging : float
+    MIN_REPETITIONS = 2
     MAX_REPETITIONS = 4
 
     def apply(self, sentences : List[str]) -> List[str] :
@@ -86,8 +87,16 @@ class Perturbation:
         repetition = rng.choice([0, 1], size=N, p=[1.0 - self.word_repetition, self.word_repetition])
         switch = rng.choice([0, 1], size=N, p=[1.0 - self.word_switch, self.word_switch])
         merging = rng.choice([0, 1], size=N, p=[1.0 - self.sentence_merging, self.sentence_merging])
-        print(f"sentences: {len(sentences)}, deletion: {deletion.sum()}, repetition: {repetition.sum()}, switch: {switch.sum()}, merging: {merging.sum()}")
-    
+        # Pre calculate some intergers that are used later
+        R = rng.integers(9999, size=2*N)
+        c = 0
+        log.debug(f"Text Perturbation - sentences: {len(sentences)}, deletion: {deletion.sum()}, repetition: {repetition.sum()}, switch: {switch.sum()}, merging: {merging.sum()}")
+
+        did_merge = 0
+        did_repeat = 0
+        did_switch = 0
+        did_delete  = 0 
+
         perturbed = []
         for s, ns, delete, repeat, switch, merge in zip(sentences[0:-1], sentences[1:], deletion, repetition, switch, merging) :
             # s ... sentence
@@ -97,23 +106,30 @@ class Perturbation:
                 continue
 
             ps = s.copy()
-            if merge & len(ns) > 1:
-                ps.extend(ns[0:rng.integers(len(ns))])
+            if merge and len(ns) > 1:
+                end = R[c] % len(ns) ; c+=1
+                ps.extend(ns[0:end])
+                did_merge+=1
             if repeat:
-                pos = rng.integers(len(ps))
-                cnt = rng.integers(2, self.MAX_REPETITIONS)
+                pos = R[c] % len(ps) ; c+=1
+                cnt = (R[c] % (self.MAX_REPETITIONS-self.MIN_REPETITIONS)) + self.MIN_REPETITIONS ; c+=1
                 _ = [ps.insert(pos, ps[pos]) for i in range(cnt)]
-            if switch & len(ps)>1:
-                pos = rng.integers(len(ps)-1)
+                did_repeat += 1
+            if switch and len(ps)>1:
+                pos = R[c] % (len(ps)-1) ; c+=1                
                 tmp = ps.pop(pos+1)
                 ps.insert(pos, tmp)
+                did_switch += 1
             if delete:
-                ps.pop(rng.integers(len(ps)))
+                pos = R[c] % len(ps) ; c+=1                
+                ps.pop(pos)
+                did_delete += 1
             
             perturbed.append(ps)
         # Just add the last sentence unperturbed in order to have the same number of sentences
         perturbed.append(ns)
 
+        log.debug(f"After: merge {did_merge}, repeat {did_repeat}, switch {did_switch}, delete {did_delete}")
         return perturbed 
     
     def toDict(self):
@@ -210,7 +226,7 @@ def map_text_properties(text_file : str, line_sep : str, word_sep : str, lowpass
             _ = [word_cooc.pop(word) for word in drop_center_words] 
 
     except Exception as e:
-        print(f'Analysing text partitioned failed in map! {e}')
+        log.error(f'Analysing text partitioned failed in map! {e}')
 
 
     return Properties(
@@ -312,7 +328,6 @@ class Corpus:
                 try:
                     self.properties = self._analyze(files, nPartitions)
                 except Exception as e:
-                    from pudb.forked import set_trace as st; st()
                     log.error(f"Analyzing text properties, failed! {e}")
             else:
                 log.error("splitting text file for multi-thread processing failed!")
