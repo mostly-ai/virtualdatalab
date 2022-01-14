@@ -216,5 +216,5 @@ class MyGenerator(BaseSynthesizer):
 
 ## Acknowledgments
 
-This research is supported by the "ICT of the Future” funding programme of the Austrian Federal Ministry for Climate Action, Environment, Energy, Mobility, Innovation and Technology.
+This research is supported by the "ICT of the Future” funding programme of the Austrian Federal Ministry for Climate Action, Environment, Energy, Mobility, Innovation and Technology. See https://anonymousbigdata.net/ for further details.
 
