@@ -1,3 +1,8 @@
+
+**UPDATE**: Please go to https://github.com/mostly-ai/mostlyai-qa for the open-source **Synthetic Data Quality Assurance** toolkit.
+
+----
+
 # Virtual Data Lab (VDL)
 
 The Virtual Data Lab is a python-based framework to assess generative models for sequential data with respect to their *accuracy* as well as *privacy* given a range of real-world and machine-generated datasets. In addition, it contains basic synthesizers capable of sequential data generation. The DL-based generative models, developed by [MOSTLY AI](https://mostly.ai/) as part of their commercial offering, are not part of this package.
